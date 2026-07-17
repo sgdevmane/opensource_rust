@@ -102,6 +102,102 @@ pub fn validate_batch(
                     }
                 }
             }
+
+            // Check minimum constraint
+            if let Some(min_val) = col_schema.minimum {
+                let cell_val = match cell {
+                    CellValue::Int(v) => Some(*v as f64),
+                    CellValue::Float(v) => Some(*v),
+                    _ => None,
+                };
+                if let Some(val) = cell_val {
+                    if val < min_val {
+                        let err = ValidationError {
+                            row: row.index,
+                            column: col_schema.name.clone(),
+                            message: format!("value {val} is below minimum {min_val}"),
+                        };
+                        if strict {
+                            return Err(DataForgeError::Schema {
+                                row: row.index,
+                                column: col_schema.name.clone(),
+                                message: err.message,
+                            });
+                        }
+                        errors.push(err);
+                    }
+                }
+            }
+
+            // Check maximum constraint
+            if let Some(max_val) = col_schema.maximum {
+                let cell_val = match cell {
+                    CellValue::Int(v) => Some(*v as f64),
+                    CellValue::Float(v) => Some(*v),
+                    _ => None,
+                };
+                if let Some(val) = cell_val {
+                    if val > max_val {
+                        let err = ValidationError {
+                            row: row.index,
+                            column: col_schema.name.clone(),
+                            message: format!("value {val} exceeds maximum {max_val}"),
+                        };
+                        if strict {
+                            return Err(DataForgeError::Schema {
+                                row: row.index,
+                                column: col_schema.name.clone(),
+                                message: err.message,
+                            });
+                        }
+                        errors.push(err);
+                    }
+                }
+            }
+
+            // Check enum constraints
+            if let Some(ref allowed_enums) = col_schema.enum_values {
+                if let Some(s) = cell.as_str() {
+                    if !allowed_enums.iter().any(|e| e == s) {
+                        let err = ValidationError {
+                            row: row.index,
+                            column: col_schema.name.clone(),
+                            message: format!("value '{s}' is not in allowed enums {:?}", allowed_enums),
+                        };
+                        if strict {
+                            return Err(DataForgeError::Schema {
+                                row: row.index,
+                                column: col_schema.name.clone(),
+                                message: err.message,
+                            });
+                        }
+                        errors.push(err);
+                    }
+                }
+            }
+
+            // Check pattern/regex validation
+            if let Some(ref pattern_str) = col_schema.pattern {
+                if let Some(s) = cell.as_str() {
+                    if let Ok(re) = regex::Regex::new(pattern_str) {
+                        if !re.is_match(s) {
+                            let err = ValidationError {
+                                row: row.index,
+                                column: col_schema.name.clone(),
+                                message: format!("value '{s}' does not match pattern '{pattern_str}'"),
+                            };
+                            if strict {
+                                return Err(DataForgeError::Schema {
+                                    row: row.index,
+                                    column: col_schema.name.clone(),
+                                    message: err.message,
+                                });
+                            }
+                            errors.push(err);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -239,5 +335,39 @@ mod tests {
 
         assert_eq!(batch.rows[0].get_int(1), Some(30));
         assert_eq!(batch.rows[0].get(2).unwrap().as_bool(), Some(true));
+    }
+
+    #[test]
+    fn test_schema_constraints() {
+        let schema = vec![
+            ColumnSchema::new("age", DataType::Int, 0).with_minimum(18.0).with_maximum(65.0),
+            ColumnSchema::new("role", DataType::String, 1).with_enum_values(vec!["admin", "user"]),
+            ColumnSchema::new("email", DataType::String, 2).with_pattern(r"^.+@.+\..+$"),
+        ];
+
+        // Valid row
+        let mut batch = RowBatch::new(0);
+        let mut r1 = Row::new(0);
+        r1.push(CellValue::from(30_i64));
+        r1.push(CellValue::from("user"));
+        r1.push(CellValue::from("test@example.com"));
+        batch.push(r1);
+
+        let errors = validate_batch(&batch, &schema, false).unwrap();
+        assert!(errors.is_empty());
+
+        // Invalid row
+        let mut batch_invalid = RowBatch::new(0);
+        let mut r2 = Row::new(0);
+        r2.push(CellValue::from(15_i64)); // under min
+        r2.push(CellValue::from("manager")); // not in enum
+        r2.push(CellValue::from("invalid-email")); // pattern mismatch
+        batch_invalid.push(r2);
+
+        let errors = validate_batch(&batch_invalid, &schema, false).unwrap();
+        assert_eq!(errors.len(), 3);
+        assert!(errors[0].message.contains("below minimum"));
+        assert!(errors[1].message.contains("allowed enums"));
+        assert!(errors[2].message.contains("pattern"));
     }
 }

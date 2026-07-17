@@ -42,6 +42,9 @@ pub struct Pipeline {
 
     /// Type coercions: (column_index, target_type)
     coercions: Vec<(usize, crate::types::DataType)>,
+
+    /// PII masking rules: (column_index, strategy)
+    masks: Vec<(usize, crate::transform::mask::MaskingStrategy)>,
 }
 
 impl Pipeline {
@@ -55,6 +58,7 @@ impl Pipeline {
             computed_columns: Vec::new(),
             sort_keys: Vec::new(),
             coercions: Vec::new(),
+            masks: Vec::new(),
         }
     }
 
@@ -104,6 +108,12 @@ impl Pipeline {
         self
     }
 
+    /// Apply a PII masking strategy to a target column.
+    pub fn mask(mut self, column: usize, strategy: crate::transform::mask::MaskingStrategy) -> Self {
+        self.masks.push((column, strategy));
+        self
+    }
+
     /// Apply all pipeline stages to a batch, returning the transformed batch.
     ///
     /// Returns `None` if all rows were filtered out.
@@ -126,6 +136,11 @@ impl Pipeline {
         // Stage 2: Type coercions
         for (col, target) in &self.coercions {
             map::coerce_column(&mut batch, *col, target);
+        }
+
+        // Stage 2.5: PII Masking
+        for (col, strategy) in &self.masks {
+            crate::transform::mask::mask_column(&mut batch, *col, strategy);
         }
 
         // Stage 3: Computed columns (before selection, so they can reference all columns)
@@ -165,6 +180,7 @@ impl Pipeline {
             && self.computed_columns.is_empty()
             && self.sort_keys.is_empty()
             && self.coercions.is_empty()
+            && self.masks.is_empty()
     }
 }
 
@@ -262,5 +278,20 @@ mod tests {
         assert_eq!(result.rows[0].get_str(0), Some("Diana"));
         assert_eq!(result.rows[1].get_str(0), Some("Bob"));
         assert_eq!(result.rows[2].get_str(0), Some("Alice"));
+    }
+
+    #[test]
+    fn test_pipeline_masking() {
+        use crate::transform::mask::MaskingStrategy;
+
+        let pipeline = Pipeline::new()
+            .mask(0, MaskingStrategy::Redact);
+
+        let batch = make_test_batch();
+        let result = pipeline.apply(batch).unwrap();
+
+        // The first column ("name") should be redacted: "Alice" -> "*****"
+        assert_eq!(result.rows[0].get_str(0), Some("*****"));
+        assert_eq!(result.rows[1].get_str(0), Some("***"));
     }
 }

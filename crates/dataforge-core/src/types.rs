@@ -150,6 +150,18 @@ pub struct ColumnSchema {
 
     /// Column index (0-based)
     pub index: usize,
+
+    /// Minimum allowed value (for numeric types)
+    pub minimum: Option<f64>,
+
+    /// Maximum allowed value (for numeric types)
+    pub maximum: Option<f64>,
+
+    /// Allowed enum values (string representations)
+    pub enum_values: Option<Vec<String>>,
+
+    /// Regular expression pattern to validate string values
+    pub pattern: Option<String>,
 }
 
 /// Metadata about a single sheet/worksheet.
@@ -632,6 +644,10 @@ impl ColumnSchema {
             nullable: true,
             max_length: None,
             index,
+            minimum: None,
+            maximum: None,
+            enum_values: None,
+            pattern: None,
         }
     }
 
@@ -644,6 +660,30 @@ impl ColumnSchema {
     /// Set the maximum string length for this column.
     pub fn with_max_length(mut self, max_length: usize) -> Self {
         self.max_length = Some(max_length);
+        self
+    }
+
+    /// Set the minimum value constraint for this column.
+    pub fn with_minimum(mut self, minimum: f64) -> Self {
+        self.minimum = Some(minimum);
+        self
+    }
+
+    /// Set the maximum value constraint for this column.
+    pub fn with_maximum(mut self, maximum: f64) -> Self {
+        self.maximum = Some(maximum);
+        self
+    }
+
+    /// Set the allowed enum values for this column.
+    pub fn with_enum_values(mut self, enum_values: Vec<impl Into<String>>) -> Self {
+        self.enum_values = Some(enum_values.into_iter().map(|s| s.into()).collect());
+        self
+    }
+
+    /// Set the regex pattern validation constraint for this column.
+    pub fn with_pattern(mut self, pattern: impl Into<String>) -> Self {
+        self.pattern = Some(pattern.into());
         self
     }
 }

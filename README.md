@@ -93,7 +93,12 @@ fn main() {
 
 ### 2. Node.js Bindings (napi-rs)
 
-Compile the Node bindings locally:
+Install directly from the npm registry (precompiled binaries are loaded dynamically):
+```bash
+npm install dataforge-native
+```
+
+Alternatively, to compile the Node bindings from source:
 ```bash
 cd crates/dataforge-node
 npm install

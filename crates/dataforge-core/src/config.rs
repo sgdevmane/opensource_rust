@@ -589,6 +589,53 @@ impl WriterConfig {
         self.xlsx.style = template;
         self
     }
+
+    /// Add a conditional formatting rule for XLSX output.
+    pub fn with_conditional_format(mut self, rule: ConditionalFormatRule) -> Self {
+        self.xlsx.conditional_formats.push(rule);
+        self
+    }
+
+    /// Add a chart configuration to the XLSX sheet output.
+    pub fn with_chart(mut self, chart: SpreadsheetChart) -> Self {
+        self.xlsx.chart = Some(chart);
+        self
+    }
+}
+
+/// Rule for applying conditional styling to specific column values.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConditionalFormatRule {
+    /// Target column index to evaluate (0-based)
+    pub column_index: usize,
+    /// Minimum numeric boundary (if applicable)
+    pub min_val: Option<f64>,
+    /// Maximum numeric boundary (if applicable)
+    pub max_val: Option<f64>,
+    /// Target XLSX style sheet index to apply when matching
+    pub style_index: u32,
+}
+
+/// Type of spreadsheet chart.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum ChartType {
+    /// Bar chart layout.
+    Bar,
+    /// Line chart layout.
+    Line,
+}
+
+/// Chart configurations to inject in the spreadsheet.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpreadsheetChart {
+    /// Type of the chart (e.g. Bar, Line)
+    pub chart_type: ChartType,
+    /// Header/title label for the chart
+    pub title: String,
+    /// Column index for x-axis category values (0-based)
+    pub x_axis_col: usize,
+    /// Column index for y-axis numeric values (0-based)
+    pub y_axis_col: usize,
 }
 
 /// XLSX-specific write configuration.
@@ -611,6 +658,12 @@ pub struct XlsxWriteConfig {
 
     /// Styling template to apply (default: None)
     pub style: crate::xlsx::StyleTemplate,
+
+    /// Conditional formatting rules to evaluate when writing numeric fields
+    pub conditional_formats: Vec<ConditionalFormatRule>,
+
+    /// Optional chart configuration
+    pub chart: Option<SpreadsheetChart>,
 }
 
 impl Default for XlsxWriteConfig {
@@ -622,6 +675,8 @@ impl Default for XlsxWriteConfig {
             number_format: None,
             date_format: "yyyy-mm-dd".to_string(),
             style: crate::xlsx::StyleTemplate::None,
+            conditional_formats: Vec::new(),
+            chart: None,
         }
     }
 }

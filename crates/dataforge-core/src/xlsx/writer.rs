@@ -174,7 +174,7 @@ impl<W: Write + Seek> XlsxWriter<W> {
             let col_letter = column_index_to_letter(col_idx);
             let cell_ref = format!("{col_letter}{row_num}");
 
-            self.write_cell(&cell_ref, cell, row_num as u64)?;
+            self.write_cell(&cell_ref, cell, row_num as u64, col_idx)?;
         }
 
         self.worksheet_xml.extend_from_slice(b"</row>\n");
@@ -201,14 +201,39 @@ impl<W: Write + Seek> XlsxWriter<W> {
     }
 
     /// Write a single cell element to the worksheet XML.
-    fn write_cell(&mut self, cell_ref: &str, value: &CellValue, row_num: u64) -> Result<()> {
+    fn write_cell(&mut self, cell_ref: &str, value: &CellValue, row_num: u64, col_idx: usize) -> Result<()> {
         let is_even_row = row_num % 2 == 0;
         let has_alt_style = !matches!(self.config.xlsx.style, StyleTemplate::None);
-        let default_style = if has_alt_style && is_even_row {
-            " s=\"4\""
+        
+        let mut style_attr = if has_alt_style && is_even_row {
+            " s=\"4\"".to_string()
         } else {
-            ""
+            "".to_string()
         };
+
+        // Evaluate conditional format rules
+        for rule in &self.config.xlsx.conditional_formats {
+            if rule.column_index == col_idx {
+                let cell_val = match value {
+                    CellValue::Int(v) => Some(*v as f64),
+                    CellValue::Float(v) => Some(*v),
+                    _ => None,
+                };
+                if let Some(val) = cell_val {
+                    let mut is_match = true;
+                    if let Some(min) = rule.min_val {
+                        if val < min { is_match = false; }
+                    }
+                    if let Some(max) = rule.max_val {
+                        if val > max { is_match = false; }
+                    }
+                    if is_match {
+                        style_attr = format!(" s=\"{}\"", rule.style_index);
+                        break;
+                    }
+                }
+            }
+        }
 
         match value {
             CellValue::Null => {
@@ -217,29 +242,27 @@ impl<W: Write + Seek> XlsxWriter<W> {
             CellValue::Bool(v) => {
                 let val = if *v { "1" } else { "0" };
                 self.worksheet_xml.extend_from_slice(
-                    format!("<c r=\"{cell_ref}\" t=\"b\"{default_style}><v>{val}</v></c>\n").as_bytes(),
+                    format!("<c r=\"{cell_ref}\" t=\"b\"{style_attr}><v>{val}</v></c>\n").as_bytes(),
                 );
             }
             CellValue::Int(v) => {
                 self.worksheet_xml.extend_from_slice(
-                    format!("<c r=\"{cell_ref}\"{default_style}><v>{v}</v></c>\n").as_bytes(),
+                    format!("<c r=\"{cell_ref}\"{style_attr}><v>{v}</v></c>\n").as_bytes(),
                 );
             }
             CellValue::Float(v) => {
                 self.worksheet_xml.extend_from_slice(
-                    format!("<c r=\"{cell_ref}\"{default_style}><v>{v}</v></c>\n").as_bytes(),
+                    format!("<c r=\"{cell_ref}\"{style_attr}><v>{v}</v></c>\n").as_bytes(),
                 );
             }
             CellValue::String(s) => {
                 let idx = self.add_shared_string(s.as_str());
                 self.worksheet_xml.extend_from_slice(
-                    format!("<c r=\"{cell_ref}\" t=\"s\"{default_style}><v>{idx}</v></c>\n").as_bytes(),
+                    format!("<c r=\"{cell_ref}\" t=\"s\"{style_attr}><v>{idx}</v></c>\n").as_bytes(),
                 );
             }
             CellValue::DateTime(dt) => {
-                // Convert to Excel serial number
                 let serial = datetime_to_serial(dt);
-                // Style index 1 = date format
                 self.worksheet_xml.extend_from_slice(
                     format!("<c r=\"{cell_ref}\" s=\"1\"><v>{serial}</v></c>\n").as_bytes(),
                 );
@@ -252,9 +275,7 @@ impl<W: Write + Seek> XlsxWriter<W> {
                 );
             }
             CellValue::Time(t) => {
-                // Time-only as fraction of a day
                 let serial = t.num_seconds_from_midnight() as f64 / 86400.0;
-                // Style index 2 = time format
                 self.worksheet_xml.extend_from_slice(
                     format!("<c r=\"{cell_ref}\" s=\"2\"><v>{serial}</v></c>\n").as_bytes(),
                 );
@@ -262,18 +283,18 @@ impl<W: Write + Seek> XlsxWriter<W> {
             CellValue::Duration(secs) => {
                 let idx = self.add_shared_string(&format!("{secs}s"));
                 self.worksheet_xml.extend_from_slice(
-                    format!("<c r=\"{cell_ref}\" t=\"s\"{default_style}><v>{idx}</v></c>\n").as_bytes(),
+                    format!("<c r=\"{cell_ref}\" t=\"s\"{style_attr}><v>{idx}</v></c>\n").as_bytes(),
                 );
             }
             CellValue::Error(e) => {
                 self.worksheet_xml.extend_from_slice(
-                    format!("<c r=\"{cell_ref}\" t=\"e\"{default_style}><v>{e}</v></c>\n").as_bytes(),
+                    format!("<c r=\"{cell_ref}\" t=\"e\"{style_attr}><v>{e}</v></c>\n").as_bytes(),
                 );
             }
             CellValue::Bytes(b) => {
                 let idx = self.add_shared_string(&format!("<{} bytes>", b.len()));
                 self.worksheet_xml.extend_from_slice(
-                    format!("<c r=\"{cell_ref}\" t=\"s\"{default_style}><v>{idx}</v></c>\n").as_bytes(),
+                    format!("<c r=\"{cell_ref}\" t=\"s\"{style_attr}><v>{idx}</v></c>\n").as_bytes(),
                 );
             }
         }
@@ -326,16 +347,38 @@ impl<W: Write + Seek> XlsxWriter<W> {
             }
         }
 
+        if self.config.xlsx.chart.is_some() {
+            self.worksheet_xml.extend_from_slice(b"<drawing r:id=\"rIdDrawing1\"/>\n");
+        }
         self.worksheet_xml.extend_from_slice(b"</worksheet>\n");
 
         let options = SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated)
             .compression_level(self.config.compression_level);
 
+        // Build content types dynamically
+        let mut content_types = String::from(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>"#
+        );
+        if self.config.xlsx.chart.is_some() {
+            content_types.push_str(
+                r#"<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>
+<Override PartName="/xl/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>"#
+            );
+        }
+        content_types.push_str("</Types>");
+
         // Write [Content_Types].xml
         self.zip
             .start_file("[Content_Types].xml", options)?;
-        self.zip.write_all(CONTENT_TYPES_XML)?;
+        self.zip.write_all(content_types.as_bytes())?;
 
         // Write _rels/.rels
         self.zip
@@ -384,6 +427,98 @@ impl<W: Write + Seek> XlsxWriter<W> {
         self.zip
             .start_file("xl/worksheets/sheet1.xml", options)?;
         self.zip.write_all(&self.worksheet_xml)?;
+
+        // If chart is configured, generate drawing and chart files
+        if let Some(ref chart) = self.config.xlsx.chart {
+            // Write xl/worksheets/_rels/sheet1.xml.rels
+            self.zip.start_file("xl/worksheets/_rels/sheet1.xml.rels", options)?;
+            let sheet_rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdDrawing1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
+</Relationships>"#;
+            self.zip.write_all(sheet_rels.as_bytes())?;
+
+            // Write xl/drawings/drawing1.xml
+            self.zip.start_file("xl/drawings/drawing1.xml", options)?;
+            let drawing_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <xdr:twoCellAnchor>
+    <xdr:from><xdr:col>4</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>2</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+    <xdr:to><xdr:col>12</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>18</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+    <xdr:graphicFrame macro="">
+      <xdr:nvGraphicFramePr>
+        <xdr:cNvPr id="2" name="Chart 1"/>
+        <xdr:cNvGraphicFramePr/>
+      </xdr:nvGraphicFramePr>
+      <xdr:xfrm>
+        <xdr:off x="0" y="0"/>
+        <xdr:ext cx="0" cy="0"/>
+      </xdr:xfrm>
+      <a:graphic>
+        <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
+          <c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1"/>
+        </a:graphicData>
+      </a:graphic>
+    </xdr:graphicFrame>
+    <xdr:clientData/>
+  </xdr:twoCellAnchor>
+</xdr:wsDr>"#;
+            self.zip.write_all(drawing_xml.as_bytes())?;
+
+            // Write xl/drawings/_rels/drawing1.xml.rels
+            self.zip.start_file("xl/drawings/_rels/drawing1.xml.rels", options)?;
+            let drawing_rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/>
+</Relationships>"#;
+            self.zip.write_all(drawing_rels.as_bytes())?;
+
+            // Generate ranges
+            let x_letter = column_index_to_letter(chart.x_axis_col);
+            let y_letter = column_index_to_letter(chart.y_axis_col);
+            let last_row = self.current_row_num;
+            let x_range = format!("${x_letter}$2:${x_letter}${last_row}");
+            let y_range = format!("${y_letter}$2:${y_letter}${last_row}");
+            let title_escaped = xml_escape(&chart.title);
+
+            let chart_tag = match chart.chart_type {
+                crate::config::ChartType::Bar => "barChart",
+                crate::config::ChartType::Line => "lineChart",
+            };
+
+            // Write xl/charts/chart1.xml
+            self.zip.start_file("xl/charts/chart1.xml", options)?;
+            let chart_xml = format!(
+                r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <c:chart>
+    <c:title>
+      <c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>{title_escaped}</a:t></a:r></a:p></c:rich></c:tx>
+    </c:title>
+    <c:plotArea>
+      <c:{chart_tag}>
+        <c:ser>
+          <c:idx val="0"/>
+          <c:order val="0"/>
+          <c:tx><c:v>Series 1</c:v></c:tx>
+          <c:cat>
+            <c:strRef>
+              <c:f>Sheet1!{x_range}</c:f>
+            </c:strRef>
+          </c:cat>
+          <c:val>
+            <c:numRef>
+              <c:f>Sheet1!{y_range}</c:f>
+            </c:numRef>
+          </c:val>
+        </c:ser>
+      </c:{chart_tag}>
+    </c:plotArea>
+  </c:chart>
+</c:chartSpace>"#
+            );
+            self.zip.write_all(chart_xml.as_bytes())?;
+        }
 
         // Finalize the ZIP archive
         self.zip.finish()?;
@@ -441,16 +576,6 @@ fn xml_escape(s: &str) -> String {
 // =============================================================================
 // Static XML templates for the XLSX package structure
 // =============================================================================
-
-const CONTENT_TYPES_XML: &[u8] = br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-<Default Extension="xml" ContentType="application/xml"/>
-<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
-<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
-</Types>"#;
 
 const RELS_XML: &[u8] = br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -537,6 +662,74 @@ mod tests {
         row2.push(CellValue::from("test2"));
         row2.push(CellValue::from(43_i64));
         writer.write_row(&row2).unwrap();
+
+        let rows = writer.finish().unwrap();
+        assert_eq!(rows, 2);
+    }
+
+    #[test]
+    fn test_xlsx_conditional_formatting() {
+        let rule = crate::config::ConditionalFormatRule {
+            column_index: 1,
+            min_val: Some(100.0),
+            max_val: None,
+            style_index: 3,
+        };
+        let config = WriterConfig::default()
+            .with_headers(vec!["Name".into(), "Value".into()])
+            .with_conditional_format(rule);
+
+        let buffer = Cursor::new(Vec::new());
+        let mut writer = XlsxWriter::new(buffer, config).unwrap();
+
+        // Row 1: value = 50 (no match)
+        let mut row1 = Row::new(0);
+        row1.push(CellValue::from("Low"));
+        row1.push(CellValue::from(50_i64));
+        writer.write_row(&row1).unwrap();
+
+        // Row 2: value = 150 (matches rule, style index 3)
+        let mut row2 = Row::new(1);
+        row2.push(CellValue::from("High"));
+        row2.push(CellValue::from(150_i64));
+        writer.write_row(&row2).unwrap();
+
+        let xml_str = String::from_utf8(writer.worksheet_xml.clone()).unwrap();
+        assert!(xml_str.contains("s=\"3\""));
+        
+        let rows = writer.finish().unwrap();
+        assert_eq!(rows, 2);
+    }
+
+    #[test]
+    fn test_xlsx_chart_generation() {
+        use crate::config::{SpreadsheetChart, ChartType};
+
+        let chart = SpreadsheetChart {
+            chart_type: ChartType::Bar,
+            title: "Sales Report".to_string(),
+            x_axis_col: 0,
+            y_axis_col: 1,
+        };
+        let config = WriterConfig::default()
+            .with_headers(vec!["Product".into(), "Sales".into()])
+            .with_chart(chart);
+
+        let buffer = Cursor::new(Vec::new());
+        let mut writer = XlsxWriter::new(buffer, config).unwrap();
+
+        let mut row1 = Row::new(0);
+        row1.push(CellValue::from("Apple"));
+        row1.push(CellValue::from(100_i64));
+        writer.write_row(&row1).unwrap();
+
+        let mut row2 = Row::new(1);
+        row2.push(CellValue::from("Orange"));
+        row2.push(CellValue::from(150_i64));
+        writer.write_row(&row2).unwrap();
+
+        // Verify configuration is correctly stored
+        assert!(writer.config.xlsx.chart.is_some());
 
         let rows = writer.finish().unwrap();
         assert_eq!(rows, 2);
