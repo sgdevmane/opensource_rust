@@ -29,6 +29,8 @@ use memmap2::Mmap;
 use rayon::prelude::*;
 use tracing::{debug, info, warn};
 
+use super::sniffer::CsvSniffer;
+
 use crate::config::{Encoding, ReaderConfig};
 use crate::error::{DataForgeError, Result};
 use crate::memory::MemoryTracker;
@@ -139,9 +141,31 @@ impl CsvReader {
     /// # Errors
     /// Returns `DataForgeError::Io` if the file cannot be opened.
     /// Returns `DataForgeError::Config` if the configuration is invalid.
-    pub fn open(path: impl AsRef<Path>, config: ReaderConfig) -> Result<Self> {
+    pub fn open(path: impl AsRef<Path>, mut config: ReaderConfig) -> Result<Self> {
         let path = path.as_ref();
         config.validate()?;
+
+        // Sniff CSV dialect if enabled
+        if config.csv.auto_detect_dialect {
+            let mut file = std::fs::File::open(path).map_err(|e| {
+                DataForgeError::io(e, format!("Failed to open CSV file '{}' for sniffing", path.display()))
+            })?;
+            use std::io::Read;
+            let mut sample = vec![0; 2048];
+            let bytes_read = file.read(&mut sample).unwrap_or(0);
+            sample.truncate(bytes_read);
+            if let Ok(dialect) = CsvSniffer::sniff(&sample) {
+                config.csv.delimiter = dialect.delimiter;
+                config.csv.quote_char = dialect.quote_char;
+                config.csv.has_header = dialect.has_header;
+                info!(
+                    delimiter = %((dialect.delimiter as char).to_string()),
+                    quote = %((dialect.quote_char as char).to_string()),
+                    has_header = dialect.has_header,
+                    "Auto-detected CSV dialect"
+                );
+            }
+        }
 
         // Create memory tracker based on config
         let memory_tracker = MemoryTracker::new(
@@ -181,8 +205,24 @@ impl CsvReader {
     /// # Arguments
     /// * `data` - Raw CSV bytes
     /// * `config` - Reader configuration
-    pub fn from_bytes(data: Vec<u8>, config: ReaderConfig) -> Result<Self> {
+    pub fn from_bytes(data: Vec<u8>, mut config: ReaderConfig) -> Result<Self> {
         config.validate()?;
+
+        // Sniff CSV dialect if enabled
+        if config.csv.auto_detect_dialect {
+            let sample_len = data.len().min(2048);
+            if let Ok(dialect) = CsvSniffer::sniff(&data[..sample_len]) {
+                config.csv.delimiter = dialect.delimiter;
+                config.csv.quote_char = dialect.quote_char;
+                config.csv.has_header = dialect.has_header;
+                info!(
+                    delimiter = %((dialect.delimiter as char).to_string()),
+                    quote = %((dialect.quote_char as char).to_string()),
+                    has_header = dialect.has_header,
+                    "Auto-detected CSV dialect from bytes"
+                );
+            }
+        }
 
         let memory_tracker = MemoryTracker::new(
             config.max_memory_bytes,
@@ -382,6 +422,7 @@ impl CsvReader {
         let comment_char = config.csv.comment_char;
         let selected_columns = config.columns.clone();
         let headers_clone = headers.clone();
+        let null_values = config.null_values.clone();
 
         // We need the mmap to outlive the workers — wrap in Arc
         let mmap = Arc::new(mmap);
@@ -404,6 +445,7 @@ impl CsvReader {
                         flexible,
                         comment_char,
                         &selected_columns,
+                        &null_values,
                     )
                 })
                 .collect();
@@ -473,7 +515,7 @@ impl CsvReader {
             return None;
         }
 
-        let result = match &mut self.inner {
+        let mut result = match &mut self.inner {
             CsvReaderInner::Sequential(seq) => {
                 Self::read_sequential_batch(seq, &self.config, &self.headers)
             }
@@ -487,6 +529,12 @@ impl CsvReader {
                 }
             }
         };
+
+        if let Some(Ok(ref mut batch)) = result {
+            if let Err(e) = crate::schema::apply_schema(batch, &self.config) {
+                result = Some(Err(e));
+            }
+        }
 
         match &result {
             Some(Ok(batch)) if batch.is_last => self.exhausted = true,
@@ -532,6 +580,7 @@ impl CsvReader {
                         &record,
                         seq.row_index - 1,
                         &config.columns,
+                        &config.null_values,
                     );
                     batch.push(row);
                     seq.rows_read += 1;
@@ -589,6 +638,7 @@ impl CsvReader {
                         &record,
                         seq.row_index - 1,
                         &config.columns,
+                        &config.null_values,
                     );
                     batch.push(row);
                     seq.rows_read += 1;
@@ -633,6 +683,7 @@ fn record_to_row(
     record: &csv::StringRecord,
     row_index: u64,
     selected_columns: &Option<Vec<usize>>,
+    null_values: &Option<Vec<String>>,
 ) -> Row {
     let cols = match selected_columns {
         Some(cols) => cols.as_slice(),
@@ -647,13 +698,13 @@ fn record_to_row(
     if cols.is_empty() {
         // All columns
         for field in record.iter() {
-            row.push(parse_cell_value(field));
+            row.push(parse_cell_value(field, null_values));
         }
     } else {
         // Selected columns only
         for &col_idx in cols {
             if let Some(field) = record.get(col_idx) {
-                row.push(parse_cell_value(field));
+                row.push(parse_cell_value(field, null_values));
             } else {
                 row.push(CellValue::Null);
             }
@@ -674,8 +725,15 @@ fn record_to_row(
 ///
 /// This avoids forcing all values to strings, which is wasteful for
 /// numeric-heavy datasets (typical in data engineering).
-fn parse_cell_value(field: &str) -> CellValue {
+fn parse_cell_value(field: &str, null_values: &Option<Vec<String>>) -> CellValue {
     let trimmed = field.trim();
+
+    // Check custom null values
+    if let Some(null_list) = null_values {
+        if null_list.iter().any(|nv| nv == trimmed || nv == field) {
+            return CellValue::Null;
+        }
+    }
 
     // Empty fields → Null
     if trimmed.is_empty() {
@@ -843,6 +901,7 @@ fn parse_chunk(
     flexible: bool,
     comment_char: Option<u8>,
     selected_columns: &Option<Vec<usize>>,
+    null_values: &Option<Vec<String>>,
 ) -> Vec<RowBatch> {
     let mut csv_builder = csv::ReaderBuilder::new();
     csv_builder
@@ -872,7 +931,7 @@ fn parse_chunk(
     loop {
         match reader.read_record(&mut record) {
             Ok(true) => {
-                let row = record_to_row(&record, row_index, selected_columns);
+                let row = record_to_row(&record, row_index, selected_columns, null_values);
                 current_batch.push(row);
                 row_index += 1;
 
@@ -955,14 +1014,14 @@ mod tests {
 
     #[test]
     fn test_parse_cell_value() {
-        assert_eq!(parse_cell_value(""), CellValue::Null);
-        assert_eq!(parse_cell_value("  "), CellValue::Null);
-        assert_eq!(parse_cell_value("42"), CellValue::Int(42));
-        assert_eq!(parse_cell_value("-7"), CellValue::Int(-7));
-        assert_eq!(parse_cell_value("3.14"), CellValue::Float(3.14));
-        assert_eq!(parse_cell_value("true"), CellValue::Bool(true));
-        assert_eq!(parse_cell_value("FALSE"), CellValue::Bool(false));
-        assert!(matches!(parse_cell_value("hello"), CellValue::String(_)));
+        assert_eq!(parse_cell_value("", &None), CellValue::Null);
+        assert_eq!(parse_cell_value("  ", &None), CellValue::Null);
+        assert_eq!(parse_cell_value("42", &None), CellValue::Int(42));
+        assert_eq!(parse_cell_value("-7", &None), CellValue::Int(-7));
+        assert_eq!(parse_cell_value("3.14", &None), CellValue::Float(3.14));
+        assert_eq!(parse_cell_value("true", &None), CellValue::Bool(true));
+        assert_eq!(parse_cell_value("FALSE", &None), CellValue::Bool(false));
+        assert!(matches!(parse_cell_value("hello", &None), CellValue::String(_)));
     }
 
     #[test]
@@ -1020,7 +1079,7 @@ mod tests {
     #[test]
     fn test_parse_chunk_basic() {
         let data = b"Alice,30,NYC\nBob,25,LA\nCharlie,35,SF\n";
-        let batches = parse_chunk(data, 0, 10, b',', b'"', None, false, true, None, &None);
+        let batches = parse_chunk(data, 0, 10, b',', b'"', None, false, true, None, &None, &None);
 
         assert_eq!(batches.len(), 1);
         assert_eq!(batches[0].rows.len(), 3);
@@ -1037,9 +1096,18 @@ mod tests {
         record.push_field("extra");
 
         let selected = Some(vec![0, 2]); // Only name and city
-        let row = record_to_row(&record, 0, &selected);
+        let row = record_to_row(&record, 0, &selected, &None);
         assert_eq!(row.len(), 2);
         assert_eq!(row.get_str(0), Some("Alice"));
         assert_eq!(row.get_str(1), Some("NYC"));
+    }
+
+    #[test]
+    fn test_custom_null_values() {
+        let nulls = Some(vec!["N/A".to_string(), "NULL".to_string(), "\\N".to_string()]);
+        assert_eq!(parse_cell_value("N/A", &nulls), CellValue::Null);
+        assert_eq!(parse_cell_value("NULL", &nulls), CellValue::Null);
+        assert_eq!(parse_cell_value("\\N", &nulls), CellValue::Null);
+        assert_eq!(parse_cell_value("Normal", &nulls), CellValue::from("Normal"));
     }
 }

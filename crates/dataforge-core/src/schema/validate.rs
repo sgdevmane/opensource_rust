@@ -7,6 +7,7 @@
 
 use crate::error::{DataForgeError, Result};
 use crate::types::{CellValue, ColumnSchema, DataType, RowBatch};
+use crate::config::ReaderConfig;
 
 /// Validation error for a single cell.
 #[derive(Debug, Clone)]
@@ -107,6 +108,21 @@ pub fn validate_batch(
     Ok(errors)
 }
 
+/// Enforce a schema on a batch, either performing strict validation or best-effort coercion.
+pub fn apply_schema(batch: &mut RowBatch, config: &ReaderConfig) -> Result<()> {
+    if let Some(schema) = &config.schema {
+        if config.strict_schema {
+            validate_batch(batch, schema, true)?;
+        } else {
+            // Apply best-effort coercion for each column in the schema
+            for col_schema in schema {
+                crate::transform::map::coerce_column(batch, col_schema.index, &col_schema.data_type);
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Check if two data types are compatible (allows numeric widening).
 fn types_compatible(actual: DataType, expected: DataType) -> bool {
     if actual == expected {
@@ -199,5 +215,29 @@ mod tests {
 
         let errors = validate_batch(&batch, &schema, false).unwrap();
         assert!(errors.is_empty()); // Int → Float is compatible
+    }
+
+    #[test]
+    fn test_apply_schema_coercion() {
+        let schema = vec![
+            ColumnSchema::new("name", DataType::String, 0),
+            ColumnSchema::new("age", DataType::Int, 1),
+            ColumnSchema::new("active", DataType::Bool, 2),
+        ];
+        let config = ReaderConfig::default()
+            .with_schema(schema)
+            .with_strict_schema(false);
+
+        let mut batch = RowBatch::new(0);
+        let mut row = Row::new(0);
+        row.push(CellValue::from("Alice"));
+        row.push(CellValue::from("30")); // String to be coerced to Int
+        row.push(CellValue::from("yes")); // String to be coerced to Bool
+        batch.push(row);
+
+        apply_schema(&mut batch, &config).unwrap();
+
+        assert_eq!(batch.rows[0].get_int(1), Some(30));
+        assert_eq!(batch.rows[0].get(2).unwrap().as_bool(), Some(true));
     }
 }

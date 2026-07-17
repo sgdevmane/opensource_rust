@@ -76,6 +76,9 @@ mimalloc = { workspace = true }
 # --- Fast number parsing ---
 lexical-core = { workspace = true }
 
+# --- Regular expressions ---
+regex = { workspace = true }
+
 # --- Temporary files (for external merge sort) ---
 tempfile = { workspace = true }
 

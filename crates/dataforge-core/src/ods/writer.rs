@@ -1,5 +1,5 @@
 // =============================================================================
-// DataForge Core — ODS Writer (Placeholder)
+// DataForge Core — ODS Writer
 // =============================================================================
 // Streaming writer for OpenDocument Spreadsheet (.ods) files.
 // ODS files are ZIP archives with content.xml containing all data.
@@ -23,8 +23,6 @@ pub struct OdsWriter<W: Write + Seek> {
     zip: ZipWriter<W>,
     /// Configuration
     config: WriterConfig,
-    /// Content XML buffer
-    content_xml: Vec<u8>,
     /// Rows written
     rows_written: u64,
     /// Current row number
@@ -47,11 +45,23 @@ impl OdsWriter<BufWriter<File>> {
 impl<W: Write + Seek> OdsWriter<W> {
     /// Create a new ODS writer wrapping any Write + Seek implementation.
     pub fn new(inner: W, config: WriterConfig) -> Result<Self> {
-        let zip = ZipWriter::new(inner);
+        let mut zip = ZipWriter::new(inner);
+
+        // Write mimetype (must be first, uncompressed)
+        let mime_options = SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("mimetype", mime_options)?;
+        zip.write_all(b"application/vnd.oasis.opendocument.spreadsheet")?;
+
+        // Start writing content.xml
+        let options = SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated)
+            .compression_level(config.compression_level);
+        zip.start_file("content.xml", options)?;
+
         let mut writer = OdsWriter {
             zip,
             config,
-            content_xml: Vec::with_capacity(1024 * 1024),
             rows_written: 0,
             current_row: 0,
         };
@@ -65,7 +75,7 @@ impl<W: Write + Seek> OdsWriter<W> {
 
     /// Start the content XML.
     fn start_content(&mut self) -> Result<()> {
-        self.content_xml.extend_from_slice(
+        self.zip.write_all(
             b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
             <office:document-content \
               xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" \
@@ -76,12 +86,12 @@ impl<W: Write + Seek> OdsWriter<W> {
               office:version=\"1.3\">\n\
             <office:body>\n\
             <office:spreadsheet>\n",
-        );
+        )?;
 
         let sheet_name = xml_escape(&self.config.ods.sheet_name);
-        self.content_xml.extend_from_slice(
+        self.zip.write_all(
             format!("<table:table table:name=\"{sheet_name}\">\n").as_bytes(),
-        );
+        )?;
 
         Ok(())
     }
@@ -89,35 +99,31 @@ impl<W: Write + Seek> OdsWriter<W> {
     /// Write header row.
     fn write_header_row(&mut self) -> Result<()> {
         if let Some(headers) = self.config.headers.clone() {
-            self.content_xml
-                .extend_from_slice(b"<table:table-row>\n");
+            self.zip.write_all(b"<table:table-row>\n")?;
             for header in &headers {
                 let escaped = xml_escape(header);
-                self.content_xml.extend_from_slice(
+                self.zip.write_all(
                     format!(
                         "<table:table-cell office:value-type=\"string\">\
                         <text:p>{escaped}</text:p></table:table-cell>\n"
                     )
                     .as_bytes(),
-                );
+                )?;
             }
-            self.content_xml
-                .extend_from_slice(b"</table:table-row>\n");
+            self.zip.write_all(b"</table:table-row>\n")?;
         }
         Ok(())
     }
 
     /// Write a single row.
     pub fn write_row(&mut self, row: &Row) -> Result<()> {
-        self.content_xml
-            .extend_from_slice(b"<table:table-row>\n");
+        self.zip.write_all(b"<table:table-row>\n")?;
 
         for cell in &row.cells {
             self.write_cell(cell)?;
         }
 
-        self.content_xml
-            .extend_from_slice(b"</table:table-row>\n");
+        self.zip.write_all(b"</table:table-row>\n")?;
         self.rows_written += 1;
         Ok(())
     }
@@ -140,71 +146,70 @@ impl<W: Write + Seek> OdsWriter<W> {
     fn write_cell(&mut self, value: &CellValue) -> Result<()> {
         match value {
             CellValue::Null => {
-                self.content_xml
-                    .extend_from_slice(b"<table:table-cell/>\n");
+                self.zip.write_all(b"<table:table-cell/>\n")?;
             }
             CellValue::Bool(v) => {
                 let val = if *v { "true" } else { "false" };
                 let display = if *v { "TRUE" } else { "FALSE" };
-                self.content_xml.extend_from_slice(
+                self.zip.write_all(
                     format!(
                         "<table:table-cell office:value-type=\"boolean\" office:boolean-value=\"{val}\">\
                         <text:p>{display}</text:p></table:table-cell>\n"
                     ).as_bytes(),
-                );
+                )?;
             }
             CellValue::Int(v) => {
-                self.content_xml.extend_from_slice(
+                self.zip.write_all(
                     format!(
                         "<table:table-cell office:value-type=\"float\" office:value=\"{v}\">\
                         <text:p>{v}</text:p></table:table-cell>\n"
                     ).as_bytes(),
-                );
+                )?;
             }
             CellValue::Float(v) => {
-                self.content_xml.extend_from_slice(
+                self.zip.write_all(
                     format!(
                         "<table:table-cell office:value-type=\"float\" office:value=\"{v}\">\
                         <text:p>{v}</text:p></table:table-cell>\n"
                     ).as_bytes(),
-                );
+                )?;
             }
             CellValue::String(s) => {
                 let escaped = xml_escape(s.as_str());
-                self.content_xml.extend_from_slice(
+                self.zip.write_all(
                     format!(
                         "<table:table-cell office:value-type=\"string\">\
                         <text:p>{escaped}</text:p></table:table-cell>\n"
                     ).as_bytes(),
-                );
+                )?;
             }
             CellValue::DateTime(dt) => {
                 let iso = dt.format("%Y-%m-%dT%H:%M:%S");
                 let display = dt.format("%Y-%m-%d %H:%M:%S");
-                self.content_xml.extend_from_slice(
+                self.zip.write_all(
                     format!(
                         "<table:table-cell office:value-type=\"date\" office:date-value=\"{iso}\">\
                         <text:p>{display}</text:p></table:table-cell>\n"
                     ).as_bytes(),
-                );
+                )?;
             }
             CellValue::Date(d) => {
                 let iso = d.format("%Y-%m-%d");
-                self.content_xml.extend_from_slice(
+                self.zip.write_all(
                     format!(
                         "<table:table-cell office:value-type=\"date\" office:date-value=\"{iso}\">\
                         <text:p>{iso}</text:p></table:table-cell>\n"
                     ).as_bytes(),
-                );
+                )?;
             }
             _ => {
                 let display = xml_escape(&value.to_display_string());
-                self.content_xml.extend_from_slice(
+                self.zip.write_all(
                     format!(
                         "<table:table-cell office:value-type=\"string\">\
                         <text:p>{display}</text:p></table:table-cell>\n"
                     ).as_bytes(),
-                );
+                )?;
             }
         }
         Ok(())
@@ -213,32 +218,22 @@ impl<W: Write + Seek> OdsWriter<W> {
     /// Finalize the ODS file.
     pub fn finish(mut self) -> Result<u64> {
         // Close content XML
-        self.content_xml.extend_from_slice(
+        self.zip.write_all(
             b"</table:table>\n\
             </office:spreadsheet>\n\
             </office:body>\n\
             </office:document-content>",
-        );
+        )?;
 
         let options = SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
-
-        // Write mimetype (must be first, uncompressed)
-        let mime_options = SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
-        self.zip.start_file("mimetype", mime_options)?;
-        self.zip
-            .write_all(b"application/vnd.oasis.opendocument.spreadsheet")?;
+            .compression_method(zip::CompressionMethod::Deflated)
+            .compression_level(self.config.compression_level);
 
         // Write META-INF/manifest.xml
-        self.zip
-            .start_file("META-INF/manifest.xml", options)?;
+        self.zip.start_file("META-INF/manifest.xml", options)?;
         self.zip.write_all(ODS_MANIFEST_XML)?;
 
-        // Write content.xml
-        self.zip.start_file("content.xml", options)?;
-        self.zip.write_all(&self.content_xml)?;
-
+        // Finalize ZIP
         self.zip.finish()?;
 
         info!(rows_written = self.rows_written, "ODS writing complete");

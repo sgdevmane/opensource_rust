@@ -7,6 +7,8 @@
 
 pub mod reader;
 pub mod writer;
+pub mod sniffer;
 
 pub use reader::CsvReader;
 pub use writer::CsvWriter;
+pub use sniffer::{CsvSniffer, SniffedDialect};

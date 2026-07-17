@@ -163,7 +163,7 @@ impl OdsReader {
             return None;
         }
 
-        match self.parse_next_batch() {
+        let mut res = match self.parse_next_batch() {
             Ok(Some(batch)) => Some(Ok(batch)),
             Ok(None) => {
                 self.exhausted = true;
@@ -173,7 +173,15 @@ impl OdsReader {
                 self.exhausted = true;
                 Some(Err(e))
             }
+        };
+
+        if let Some(Ok(ref mut batch)) = res {
+            if let Err(e) = crate::schema::apply_schema(batch, &self.config) {
+                res = Some(Err(e));
+                self.exhausted = true;
+            }
         }
+        res
     }
 
     /// Parse the next batch from content.xml.

@@ -35,6 +35,8 @@ pub enum CompareOp {
     IsNull,
     /// Is not null/empty
     IsNotNull,
+    /// Matches a regular expression (string columns only)
+    RegexMatch,
 }
 
 /// A column-based filter condition.
@@ -88,6 +90,27 @@ impl ColumnFilter {
             CompareOp::EndsWith => {
                 if let (Some(a), Some(b)) = (cell.as_str(), self.value.as_str()) {
                     a.ends_with(b)
+                } else {
+                    false
+                }
+            }
+            CompareOp::RegexMatch => {
+                if let (Some(a), Some(pattern)) = (cell.as_str(), self.value.as_str()) {
+                    thread_local! {
+                        static REGEX_CACHE: std::cell::RefCell<std::collections::HashMap<String, regex::Regex>> =
+                            std::cell::RefCell::new(std::collections::HashMap::new());
+                    }
+                    REGEX_CACHE.with(|cache| {
+                        let mut cache = cache.borrow_mut();
+                        if !cache.contains_key(pattern) {
+                            if let Ok(re) = regex::Regex::new(pattern) {
+                                cache.insert(pattern.to_string(), re);
+                            } else {
+                                return false;
+                            }
+                        }
+                        cache.get(pattern).map(|re| re.is_match(a)).unwrap_or(false)
+                    })
                 } else {
                     false
                 }
@@ -176,5 +199,19 @@ mod tests {
 
         let row2 = make_row(vec![CellValue::from("value")]);
         assert!(!filter.matches(&row2));
+    }
+
+    #[test]
+    fn test_column_filter_regex() {
+        let filter = ColumnFilter::new(0, CompareOp::RegexMatch, CellValue::from(r"^\d{3}-\d{4}$"));
+        
+        let row1 = make_row(vec![CellValue::from("123-4567")]);
+        assert!(filter.matches(&row1));
+
+        let row2 = make_row(vec![CellValue::from("1234-567")]);
+        assert!(!filter.matches(&row2));
+
+        let row3 = make_row(vec![CellValue::from("abc-defg")]);
+        assert!(!filter.matches(&row3));
     }
 }

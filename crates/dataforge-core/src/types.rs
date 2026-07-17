@@ -186,7 +186,7 @@ pub struct SheetMetadata {
 /// # Memory
 /// - Stack-allocated for ≤32 columns (most spreadsheets)
 /// - Heap-allocated for >32 columns (rare, wide datasets)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Row {
     /// 0-based row index in the source file
     pub index: u64,
@@ -205,7 +205,7 @@ pub struct Row {
 /// - 1,024 rows: Low-latency streaming (good for real-time display)
 /// - 8,192 rows: Default (good balance of throughput and memory)
 /// - 65,536 rows: High-throughput bulk processing
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RowBatch {
     /// The rows in this batch
     pub rows: Vec<Row>,

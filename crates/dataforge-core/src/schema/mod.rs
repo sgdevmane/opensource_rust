@@ -5,4 +5,4 @@ pub mod infer;
 pub mod validate;
 
 pub use infer::infer_schema;
-pub use validate::validate_batch;
+pub use validate::{validate_batch, apply_schema};

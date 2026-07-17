@@ -83,6 +83,12 @@ pub mod schema;
 /// Data transformation pipeline (filter, map, aggregate, sort).
 pub mod transform;
 
+/// Spreadsheet formula evaluation engine.
+pub mod formula;
+
+/// Streaming JSON/JSONL reader.
+pub mod json;
+
 /// Core data types: CellValue, Row, RowBatch, ColumnSchema, DataType.
 pub mod types;
 
@@ -95,4 +101,6 @@ pub mod xlsx;
 
 pub use config::{FileFormat, ReaderConfig, WriterConfig};
 pub use error::{DataForgeError, Result};
+pub use formula::FormulaEvaluator;
+pub use json::JsonReader;
 pub use types::{CellValue, ColumnSchema, DataType, Row, RowBatch, SheetMetadata};

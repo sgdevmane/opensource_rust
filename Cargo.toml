@@ -59,7 +59,7 @@ rayon = "1"
 crossbeam-channel = "0.5"
 
 # Stack-allocated small vectors — avoids heap for small row data
-smallvec = { version = "1", features = ["union", "write", "const_generics"] }
+smallvec = { version = "1", features = ["union", "write", "const_generics", "serde"] }
 
 # Compact string — small-string optimization (SSO), 24 bytes inline
 compact_str = { version = "0.8", features = ["serde"] }
@@ -73,6 +73,9 @@ encoding_rs = "0.8"
 # Structured logging / diagnostics
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Regular expressions
+regex = "1"
 
 # High-performance memory allocator — reduced fragmentation
 mimalloc = { version = "0.1", default-features = false }

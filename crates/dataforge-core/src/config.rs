@@ -72,6 +72,9 @@ pub struct CsvConfig {
     /// Whether to allow variable-length rows (default: `true`)
     /// When false, all rows must have the same number of fields as the header.
     pub flexible: bool,
+
+    /// Whether to auto-detect CSV delimiter, quote, and headers (default: `false`)
+    pub auto_detect_dialect: bool,
 }
 
 impl Default for CsvConfig {
@@ -85,6 +88,7 @@ impl Default for CsvConfig {
             trim_fields: false,
             line_terminator: LineTerminator::default(),
             flexible: true,
+            auto_detect_dialect: false,
         }
     }
 }
@@ -304,6 +308,9 @@ pub struct ReaderConfig {
     /// Number of rows to sample for schema inference (default: 1000).
     /// Set to 0 to skip inference.
     pub inference_sample_size: usize,
+
+    /// Custom cell values that represent Null/empty cells
+    pub null_values: Option<Vec<String>>,
 }
 
 impl Default for ReaderConfig {
@@ -325,6 +332,7 @@ impl Default for ReaderConfig {
             xlsx: XlsxConfig::default(),
             ods: OdsConfig::default(),
             inference_sample_size: 1000,
+            null_values: None,
         }
     }
 }
@@ -414,6 +422,12 @@ impl ReaderConfig {
         self
     }
 
+    /// Enable or disable CSV dialect auto-detection.
+    pub fn with_auto_detect_dialect(mut self, enabled: bool) -> Self {
+        self.csv.auto_detect_dialect = enabled;
+        self
+    }
+
     /// Set the sheet to read by name.
     pub fn with_sheet_name(mut self, name: impl Into<String>) -> Self {
         let name = name.into();
@@ -444,6 +458,12 @@ impl ReaderConfig {
     /// Set the number of rows to sample for schema inference.
     pub fn with_inference_sample_size(mut self, n: usize) -> Self {
         self.inference_sample_size = n;
+        self
+    }
+
+    /// Set custom cell values that represent Null/empty cells.
+    pub fn with_null_values(mut self, values: Vec<String>) -> Self {
+        self.null_values = Some(values);
         self
     }
 
@@ -498,6 +518,9 @@ pub struct WriterConfig {
 
     /// Whether to auto-detect optimal column widths (XLSX/ODS only, default: true)
     pub auto_column_width: bool,
+
+    /// Zip archive compression level (1-9, None = store/default)
+    pub compression_level: Option<i64>,
 }
 
 impl Default for WriterConfig {
@@ -509,6 +532,7 @@ impl Default for WriterConfig {
             ods: OdsWriteConfig::default(),
             headers: None,
             auto_column_width: true,
+            compression_level: Some(6),
         }
     }
 }
@@ -535,6 +559,12 @@ impl WriterConfig {
     /// Enable or disable auto column width detection.
     pub fn with_auto_column_width(mut self, enabled: bool) -> Self {
         self.auto_column_width = enabled;
+        self
+    }
+
+    /// Set zip archive compression level (1-9).
+    pub fn with_compression_level(mut self, level: Option<i64>) -> Self {
+        self.compression_level = level;
         self
     }
 }

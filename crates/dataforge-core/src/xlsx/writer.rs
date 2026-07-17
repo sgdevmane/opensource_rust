@@ -303,7 +303,7 @@ impl<W: Write + Seek> XlsxWriter<W> {
 
         let options = SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated)
-            .compression_level(Some(6));
+            .compression_level(self.config.compression_level);
 
         // Write [Content_Types].xml
         self.zip

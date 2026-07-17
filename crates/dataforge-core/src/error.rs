@@ -98,6 +98,14 @@ pub enum DataForgeError {
     /// Internal error (should not happen — indicates a bug)
     #[error("Internal error: {message}")]
     Internal { message: String },
+
+    /// JSON serialization/deserialization failure
+    #[error("JSON error: {message}")]
+    Json {
+        message: String,
+        #[source]
+        source: serde_json::Error,
+    },
 }
 
 /// Numeric error codes for FFI consumers who can't use Rust enums.
@@ -127,6 +135,7 @@ pub enum ErrorCode {
     OdsParseError = 2002,
     ZipError = 2003,
     EncodingError = 2004,
+    JsonError = 2005,
 
     // --- Schema/type errors (3xxx) ---
     SchemaError = 3000,
@@ -170,6 +179,7 @@ impl DataForgeError {
             DataForgeError::SheetNotFound { .. } => ErrorCode::SheetNotFound,
             DataForgeError::Unsupported { .. } => ErrorCode::Unsupported,
             DataForgeError::Internal { .. } => ErrorCode::InternalError,
+            DataForgeError::Json { .. } => ErrorCode::JsonError,
         }
     }
 
@@ -249,6 +259,15 @@ impl From<quick_xml::events::attributes::AttrError> for DataForgeError {
         DataForgeError::XlsxParse {
             component: "xml_attribute".to_string(),
             message: err.to_string(),
+        }
+    }
+}
+
+impl From<serde_json::Error> for DataForgeError {
+    fn from(err: serde_json::Error) -> Self {
+        DataForgeError::Json {
+            message: err.to_string(),
+            source: err,
         }
     }
 }

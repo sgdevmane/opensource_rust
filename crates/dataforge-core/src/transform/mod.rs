@@ -13,3 +13,4 @@ pub mod pipeline;
 pub mod sort;
 
 pub use pipeline::Pipeline;
+pub use sort::{external_sort, ExternalSortIterator, SortKey, SortOrder};

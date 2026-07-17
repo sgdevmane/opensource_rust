@@ -259,9 +259,12 @@ fn is_date_format_string(format: &str) -> bool {
     // Remove color codes like [Red], [Green], etc.
     let cleaned = remove_bracket_contents(&cleaned);
 
-    // Check for date/time tokens
-    let has_date_tokens = cleaned.contains('y')  // year
-        || cleaned.contains('d')                   // day
+    // Check for date/time tokens (locale-aware for English, German, French, Spanish, Italian)
+    let has_date_tokens = cleaned.contains('y')  // year (English)
+        || cleaned.contains('d')                   // day (English)
+        || cleaned.contains('j')                   // year/day (German: Jahr/Tag, French: jour)
+        || cleaned.contains('t')                   // day (German: Tag)
+        || cleaned.contains('a')                   // year (French: année, Spanish: año)
         || (cleaned.contains('m') && !cleaned.contains('#')); // month (not number format)
 
     let has_time_tokens = cleaned.contains('h')  // hour
@@ -298,6 +301,8 @@ mod tests {
         assert!(is_date_format_string("m/d/yy h:mm"));
         assert!(is_date_format_string("hh:mm:ss"));
         assert!(is_date_format_string("yyyy-mm-dd hh:mm:ss"));
+        assert!(is_date_format_string("jjjj-mm-tt")); // German
+        assert!(is_date_format_string("aaaa-mm-jj")); // French / Spanish
 
         // Non-date formats
         assert!(!is_date_format_string("General"));

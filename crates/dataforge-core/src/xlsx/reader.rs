@@ -238,7 +238,7 @@ impl XlsxReader {
             return None;
         }
 
-        match self.parse_next_batch() {
+        let mut res = match self.parse_next_batch() {
             Ok(Some(batch)) => Some(Ok(batch)),
             Ok(None) => {
                 self.exhausted = true;
@@ -248,7 +248,15 @@ impl XlsxReader {
                 self.exhausted = true;
                 Some(Err(e))
             }
+        };
+
+        if let Some(Ok(ref mut batch)) = res {
+            if let Err(e) = crate::schema::apply_schema(batch, &self.config) {
+                res = Some(Err(e));
+                self.exhausted = true;
+            }
         }
+        res
     }
 
     /// Internal: parse the next batch of rows from the worksheet XML.
@@ -780,7 +788,6 @@ mod tests {
 
     #[test]
     fn test_resolve_shared_string() {
-        let mut sst = SharedStrings::new();
         // Manually create shared strings for testing
         let xml = br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
         <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
