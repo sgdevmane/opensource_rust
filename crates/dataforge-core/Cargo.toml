@@ -1,0 +1,93 @@
+# =============================================================================
+# DataForge Core — Pure Rust Streaming Spreadsheet Engine
+# =============================================================================
+# This is the core library that contains ALL processing logic.
+# All binding crates (FFI, Node.js, Python, WASM) are thin wrappers over this.
+#
+# Features:
+#   - Streaming CSV/XLSX/ODS read and write (constant memory usage)
+#   - Parallel chunk-based processing via Rayon
+#   - Composable transform pipelines (filter, map, aggregate, sort)
+#   - Automatic schema inference and validation
+#   - Memory-bounded operations with backpressure
+#   - Format conversion (CSV ↔ XLSX ↔ ODS)
+# =============================================================================
+
+[package]
+name = "dataforge-core"
+version = "0.1.0"
+edition = "2021"
+authors = ["DataForge Contributors"]
+description = "High-performance streaming spreadsheet engine for massive CSV/XLSX/ODS data processing"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/your-org/dataforge"
+readme = "../../README.md"
+keywords = ["csv", "xlsx", "excel", "streaming", "parallel"]
+categories = ["parser-implementations", "encoding", "filesystem"]
+rust-version = "1.75"
+
+[dependencies]
+# --- Serialization ---
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# --- Error handling ---
+thiserror = { workspace = true }
+
+# --- CSV parsing (RFC 4180 compliant, high-performance) ---
+csv = { workspace = true }
+
+# --- XML parsing (SAX-style streaming for XLSX/ODS) ---
+quick-xml = { workspace = true }
+
+# --- ZIP I/O (XLSX and ODS are ZIP-based formats) ---
+zip = { workspace = true }
+
+# --- Memory-mapped file I/O (OS-managed paging for large files) ---
+memmap2 = { workspace = true }
+
+# --- SIMD-accelerated byte scanning (fast newline/delimiter detection) ---
+memchr = { workspace = true }
+
+# --- Data parallelism (work-stealing thread pool) ---
+rayon = { workspace = true }
+
+# --- Lock-free channels (producer/consumer for streaming) ---
+crossbeam-channel = { workspace = true }
+
+# --- Stack-allocated small vectors (avoids heap for ≤32 column rows) ---
+smallvec = { workspace = true }
+
+# --- Small-string optimization (inline strings ≤ 24 bytes) ---
+compact_str = { workspace = true }
+
+# --- Date/time types ---
+chrono = { workspace = true }
+
+# --- Character encoding detection/conversion ---
+encoding_rs = { workspace = true }
+
+# --- Structured logging ---
+tracing = { workspace = true }
+
+# --- High-performance allocator ---
+mimalloc = { workspace = true }
+
+# --- Fast number parsing ---
+lexical-core = { workspace = true }
+
+# --- Temporary files (for external merge sort) ---
+tempfile = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+tempfile = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[[bench]]
+name = "csv_read"
+harness = false
+
+[[bench]]
+name = "xlsx_read"
+harness = false

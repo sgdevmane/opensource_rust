@@ -1,0 +1,59 @@
+# =============================================================================
+# DataForge .gitignore
+# Covers: Rust, Node.js, Python, WASM build artifacts
+# =============================================================================
+
+# --- Rust ---
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# --- Node.js ---
+node_modules/
+*.node
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+*.whl
+
+# --- WASM ---
+pkg/
+wasm-pack.log
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# --- Environment ---
+.env
+.env.*
+
+# --- Generated headers ---
+dataforge.h
+
+# --- Benchmark results ---
+target/criterion/
+
+# --- Temporary test files ---
+*.tmp
+*.temp

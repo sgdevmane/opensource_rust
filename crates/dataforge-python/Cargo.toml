@@ -1,0 +1,17 @@
+[package]
+name = "dataforge-python"
+version = "0.1.0"
+edition = "2021"
+description = "Python bindings for DataForge using PyO3"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "dataforge"
+crate-type = ["cdylib"]
+
+[dependencies]
+dataforge-core = { path = "../dataforge-core" }
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py39"] }
+serde_json = { workspace = true }
+compact_str = { workspace = true }
+chrono = { workspace = true }

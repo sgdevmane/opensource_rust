@@ -1,0 +1,11 @@
+{
+  "name": "dataforge-wasm",
+  "version": "0.1.0",
+  "description": "High-performance Excel and CSV streaming engine in WebAssembly",
+  "main": "pkg/dataforge_wasm.js",
+  "types": "pkg/dataforge_wasm.d.ts",
+  "scripts": {
+    "build": "wasm-pack build --target web"
+  },
+  "license": "MIT OR Apache-2.0"
+}

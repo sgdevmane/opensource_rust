@@ -1,0 +1,23 @@
+{
+  "name": "dataforge-native",
+  "version": "0.1.0",
+  "description": "High-performance Excel and CSV streaming engine for Node.js written in Rust",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "dataforge",
+    "triple": {
+      "defaults": true
+    }
+  },
+  "scripts": {
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "prepublishOnly": "napi prepublish -t npm",
+    "test": "node test.js"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0"
+  },
+  "license": "MIT OR Apache-2.0"
+}

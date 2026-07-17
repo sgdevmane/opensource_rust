@@ -1,0 +1,18 @@
+[package]
+name = "dataforge-node"
+version = "0.1.0"
+edition = "2021"
+description = "Node.js bindings for DataForge using napi-rs"
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+dataforge-core = { path = "../dataforge-core" }
+napi = { version = "2.16", features = ["async", "napi4", "tokio_rt", "serde-json"] }
+napi-derive = "2.16"
+serde_json = { workspace = true }
+
+[build-dependencies]
+napi-build = "2.1"
