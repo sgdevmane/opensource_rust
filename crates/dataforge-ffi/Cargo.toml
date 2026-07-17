@@ -13,3 +13,4 @@ dataforge-core = { path = "../dataforge-core" }
 tracing = { workspace = true }
 
 [build-dependencies]
+cbindgen = "0.27"

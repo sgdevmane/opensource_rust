@@ -171,5 +171,19 @@ impl WasmOdsReader {
             Some(Err(e)) => Err(JsValue::from_str(&e.to_string())),
             None => Ok(None),
         }
+     }
+}
+
+/// Initialize Rayon thread pool in WASM (only works when compiled with atomics).
+#[wasm_bindgen]
+pub fn init_thread_pool(num_threads: usize) -> Result<(), JsValue> {
+    #[cfg(target_feature = "atomics")]
+    {
+        wasm_bindgen_rayon::init_thread_pool(num_threads)
+    }
+    #[cfg(not(target_feature = "atomics"))]
+    {
+        let _ = num_threads;
+        Err(JsValue::from_str("Multi-threading is not supported without atomics. Compile with RUSTFLAGS='-C target-feature=+atomics'"))
     }
 }

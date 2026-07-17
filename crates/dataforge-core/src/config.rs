@@ -139,6 +139,9 @@ pub struct XlsxConfig {
 
     /// Whether to include empty rows in output (default: false)
     pub include_empty_rows: bool,
+
+    /// Password for decrypting password-protected XLSX workbooks
+    pub password: Option<String>,
 }
 
 impl Default for XlsxConfig {
@@ -150,6 +153,7 @@ impl Default for XlsxConfig {
             date_formats: Vec::new(),
             read_styles: false,
             include_empty_rows: false,
+            password: None,
         }
     }
 }
@@ -443,6 +447,12 @@ impl ReaderConfig {
         self
     }
 
+    /// Set password for decrypting password-protected XLSX files.
+    pub fn with_password(mut self, password: impl Into<String>) -> Self {
+        self.xlsx.password = Some(password.into());
+        self
+    }
+
     /// Enforce a schema during reading.
     pub fn with_schema(mut self, schema: Vec<ColumnSchema>) -> Self {
         self.schema = Some(schema);
@@ -567,6 +577,12 @@ impl WriterConfig {
         self.compression_level = level;
         self
     }
+
+    /// Set XLSX style template.
+    pub fn with_style_template(mut self, template: crate::xlsx::StyleTemplate) -> Self {
+        self.xlsx.style = template;
+        self
+    }
 }
 
 /// XLSX-specific write configuration.
@@ -586,6 +602,9 @@ pub struct XlsxWriteConfig {
 
     /// Default date format for date cells (Excel format string)
     pub date_format: String,
+
+    /// Styling template to apply (default: None)
+    pub style: crate::xlsx::StyleTemplate,
 }
 
 impl Default for XlsxWriteConfig {
@@ -596,6 +615,7 @@ impl Default for XlsxWriteConfig {
             auto_filter: false,
             number_format: None,
             date_format: "yyyy-mm-dd".to_string(),
+            style: crate::xlsx::StyleTemplate::None,
         }
     }
 }

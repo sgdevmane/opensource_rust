@@ -355,6 +355,62 @@ impl std::fmt::Display for MemoryStats {
     }
 }
 
+impl MemoryStats {
+    /// Export metrics in Prometheus text exposition format.
+    ///
+    /// This produces a multi-line string compatible with Prometheus scrapers
+    /// and Grafana dashboards. Each metric includes HELP and TYPE annotations.
+    ///
+    /// # Example output
+    /// ```text
+    /// # HELP dataforge_memory_current_bytes Current memory usage in bytes.
+    /// # TYPE dataforge_memory_current_bytes gauge
+    /// dataforge_memory_current_bytes 524288
+    /// ```
+    pub fn to_prometheus_metrics(&self) -> String {
+        format!(
+            "# HELP dataforge_memory_current_bytes Current memory usage in bytes.\n\
+             # TYPE dataforge_memory_current_bytes gauge\n\
+             dataforge_memory_current_bytes {current}\n\
+             # HELP dataforge_memory_limit_bytes Configured memory limit in bytes.\n\
+             # TYPE dataforge_memory_limit_bytes gauge\n\
+             dataforge_memory_limit_bytes {limit}\n\
+             # HELP dataforge_memory_peak_bytes Peak memory usage observed in bytes.\n\
+             # TYPE dataforge_memory_peak_bytes gauge\n\
+             dataforge_memory_peak_bytes {peak}\n\
+             # HELP dataforge_memory_total_allocated_bytes Total bytes allocated over the lifetime.\n\
+             # TYPE dataforge_memory_total_allocated_bytes counter\n\
+             dataforge_memory_total_allocated_bytes {total_alloc}\n\
+             # HELP dataforge_memory_total_released_bytes Total bytes released over the lifetime.\n\
+             # TYPE dataforge_memory_total_released_bytes counter\n\
+             dataforge_memory_total_released_bytes {total_release}\n\
+             # HELP dataforge_memory_utilization_ratio Memory utilization ratio (0.0 to 1.0).\n\
+             # TYPE dataforge_memory_utilization_ratio gauge\n\
+             dataforge_memory_utilization_ratio {utilization:.6}\n",
+            current = self.current_bytes,
+            limit = self.limit_bytes,
+            peak = self.peak_bytes,
+            total_alloc = self.total_allocated,
+            total_release = self.total_released,
+            utilization = if self.limit_bytes > 0 {
+                self.current_bytes as f64 / self.limit_bytes as f64
+            } else {
+                0.0
+            },
+        )
+    }
+}
+
+impl MemoryTracker {
+    /// Export the current memory stats in Prometheus text exposition format.
+    ///
+    /// This is a convenience method that calls `stats().to_prometheus_metrics()`.
+    /// Use this to expose metrics via an HTTP endpoint.
+    pub fn to_prometheus(&self) -> String {
+        self.stats().to_prometheus_metrics()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

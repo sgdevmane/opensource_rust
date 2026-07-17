@@ -32,7 +32,7 @@ fn main() {
 
     // Stream the file back
     let config = ReaderConfig::default().with_batch_size(1);
-    let mut reader = XlsxReader::open(&file_path, config).unwrap();
+    let reader = XlsxReader::open(&file_path, config).unwrap();
 
     println!("Headers: {:?}", reader.headers().unwrap());
 

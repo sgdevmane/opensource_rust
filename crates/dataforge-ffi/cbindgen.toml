@@ -1,0 +1,43 @@
+# =============================================================================
+# cbindgen configuration — Auto-generates C/C++ header from Rust FFI exports.
+# =============================================================================
+# Run manually: cbindgen --config cbindgen.toml --crate dataforge-ffi --output dataforge.h
+# Or let `build.rs` generate it automatically during `cargo build`.
+# =============================================================================
+
+[defines]
+
+# Language to generate bindings for (C or C++)
+language = "C"
+
+# Include a helpful header comment
+header = """/* =============================================================================
+ * DataForge — High-Performance Streaming Spreadsheet Engine
+ * =============================================================================
+ * Auto-generated C header. DO NOT EDIT.
+ *
+ * Usage:
+ *   #include \"dataforge.h\"
+ *   Link with -ldataforge_ffi
+ * ============================================================================= */"""
+
+# Include a guard to prevent double inclusion
+include_guard = "DATAFORGE_H"
+
+# Automatically rename enum variants from Rust style to C style
+[enum]
+rename_variants = "ScreamingSnakeCase"
+
+# Export settings
+[export]
+include = [
+    "DataForgeConfig",
+]
+
+# Fn settings
+[fn]
+# All exported functions are prefixed with dataforge_
+prefix = ""
+
+[parse]
+parse_deps = false

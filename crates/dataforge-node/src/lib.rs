@@ -177,6 +177,16 @@ impl JsCsvReader {
             None => Ok(None),
         }
     }
+
+    #[napi]
+    pub fn get_memory_utilization(&self) -> f64 {
+        let stats = self.inner.memory_stats();
+        if stats.limit_bytes > 0 {
+            (stats.current_bytes as f64 / stats.limit_bytes as f64) * 100.0
+        } else {
+            0.0
+        }
+    }
 }
 
 /// JS Class for XLSX Streaming Reading.
@@ -188,13 +198,21 @@ pub struct JsXlsxReader {
 #[napi]
 impl JsXlsxReader {
     #[napi(factory)]
-    pub fn open(path: String, batch_size: Option<u32>, sheet_name: Option<String>) -> Result<Self> {
+    pub fn open(
+        path: String,
+        batch_size: Option<u32>,
+        sheet_name: Option<String>,
+        password: Option<String>,
+    ) -> Result<Self> {
         let mut config = ReaderConfig::default();
         if let Some(bs) = batch_size {
             config = config.with_batch_size(bs as usize);
         }
         if let Some(ref sn) = sheet_name {
             config = config.with_sheet_name(sn);
+        }
+        if let Some(ref pwd) = password {
+            config = config.with_password(pwd);
         }
 
         XlsxReader::open(&path, config)
@@ -213,6 +231,16 @@ impl JsXlsxReader {
             Some(Ok(batch)) => Ok(Some(JsRowBatch { inner: batch })),
             Some(Err(e)) => Err(Error::new(Status::GenericFailure, e.to_string())),
             None => Ok(None),
+        }
+    }
+
+    #[napi]
+    pub fn get_memory_utilization(&self) -> f64 {
+        let stats = self.inner.memory_stats();
+        if stats.limit_bytes > 0 {
+            (stats.current_bytes as f64 / stats.limit_bytes as f64) * 100.0
+        } else {
+            0.0
         }
     }
 }
@@ -251,6 +279,16 @@ impl JsOdsReader {
             Some(Ok(batch)) => Ok(Some(JsRowBatch { inner: batch })),
             Some(Err(e)) => Err(Error::new(Status::GenericFailure, e.to_string())),
             None => Ok(None),
+        }
+    }
+
+    #[napi]
+    pub fn get_memory_utilization(&self) -> f64 {
+        let stats = self.inner.memory_stats();
+        if stats.limit_bytes > 0 {
+            (stats.current_bytes as f64 / stats.limit_bytes as f64) * 100.0
+        } else {
+            0.0
         }
     }
 }

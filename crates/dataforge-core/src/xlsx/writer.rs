@@ -21,6 +21,7 @@ use zip::ZipWriter;
 use crate::config::WriterConfig;
 use crate::error::{DataForgeError, Result};
 use crate::types::{CellValue, Row, RowBatch};
+use super::StyleTemplate;
 
 /// Streaming XLSX writer that constructs an Excel file incrementally.
 ///
@@ -140,6 +141,9 @@ impl<W: Write + Seek> XlsxWriter<W> {
             self.worksheet_xml
                 .extend_from_slice(format!("<row r=\"{row_num}\">\n").as_bytes());
 
+            let has_style = !matches!(self.config.xlsx.style, StyleTemplate::None);
+            let s_attr = if has_style { " s=\"3\"" } else { "" };
+
             for (col_idx, header) in headers.iter().enumerate() {
                 let col_letter = column_index_to_letter(col_idx);
                 let cell_ref = format!("{col_letter}{row_num}");
@@ -147,7 +151,7 @@ impl<W: Write + Seek> XlsxWriter<W> {
 
                 // Write cell with shared string type
                 self.worksheet_xml.extend_from_slice(
-                    format!("<c r=\"{cell_ref}\" t=\"s\"><v>{string_idx}</v></c>\n").as_bytes(),
+                    format!("<c r=\"{cell_ref}\" t=\"s\"{s_attr}><v>{string_idx}</v></c>\n").as_bytes(),
                 );
             }
 
@@ -170,7 +174,7 @@ impl<W: Write + Seek> XlsxWriter<W> {
             let col_letter = column_index_to_letter(col_idx);
             let cell_ref = format!("{col_letter}{row_num}");
 
-            self.write_cell(&cell_ref, cell)?;
+            self.write_cell(&cell_ref, cell, row_num as u64)?;
         }
 
         self.worksheet_xml.extend_from_slice(b"</row>\n");
@@ -197,7 +201,15 @@ impl<W: Write + Seek> XlsxWriter<W> {
     }
 
     /// Write a single cell element to the worksheet XML.
-    fn write_cell(&mut self, cell_ref: &str, value: &CellValue) -> Result<()> {
+    fn write_cell(&mut self, cell_ref: &str, value: &CellValue, row_num: u64) -> Result<()> {
+        let is_even_row = row_num % 2 == 0;
+        let has_alt_style = !matches!(self.config.xlsx.style, StyleTemplate::None);
+        let default_style = if has_alt_style && is_even_row {
+            " s=\"4\""
+        } else {
+            ""
+        };
+
         match value {
             CellValue::Null => {
                 // Skip null cells (sparse representation)
@@ -205,29 +217,29 @@ impl<W: Write + Seek> XlsxWriter<W> {
             CellValue::Bool(v) => {
                 let val = if *v { "1" } else { "0" };
                 self.worksheet_xml.extend_from_slice(
-                    format!("<c r=\"{cell_ref}\" t=\"b\"><v>{val}</v></c>\n").as_bytes(),
+                    format!("<c r=\"{cell_ref}\" t=\"b\"{default_style}><v>{val}</v></c>\n").as_bytes(),
                 );
             }
             CellValue::Int(v) => {
                 self.worksheet_xml.extend_from_slice(
-                    format!("<c r=\"{cell_ref}\"><v>{v}</v></c>\n").as_bytes(),
+                    format!("<c r=\"{cell_ref}\"{default_style}><v>{v}</v></c>\n").as_bytes(),
                 );
             }
             CellValue::Float(v) => {
                 self.worksheet_xml.extend_from_slice(
-                    format!("<c r=\"{cell_ref}\"><v>{v}</v></c>\n").as_bytes(),
+                    format!("<c r=\"{cell_ref}\"{default_style}><v>{v}</v></c>\n").as_bytes(),
                 );
             }
             CellValue::String(s) => {
                 let idx = self.add_shared_string(s.as_str());
                 self.worksheet_xml.extend_from_slice(
-                    format!("<c r=\"{cell_ref}\" t=\"s\"><v>{idx}</v></c>\n").as_bytes(),
+                    format!("<c r=\"{cell_ref}\" t=\"s\"{default_style}><v>{idx}</v></c>\n").as_bytes(),
                 );
             }
             CellValue::DateTime(dt) => {
                 // Convert to Excel serial number
                 let serial = datetime_to_serial(dt);
-                // Style index 1 = date format (we'll define this in styles.xml)
+                // Style index 1 = date format
                 self.worksheet_xml.extend_from_slice(
                     format!("<c r=\"{cell_ref}\" s=\"1\"><v>{serial}</v></c>\n").as_bytes(),
                 );
@@ -242,6 +254,7 @@ impl<W: Write + Seek> XlsxWriter<W> {
             CellValue::Time(t) => {
                 // Time-only as fraction of a day
                 let serial = t.num_seconds_from_midnight() as f64 / 86400.0;
+                // Style index 2 = time format
                 self.worksheet_xml.extend_from_slice(
                     format!("<c r=\"{cell_ref}\" s=\"2\"><v>{serial}</v></c>\n").as_bytes(),
                 );
@@ -249,18 +262,18 @@ impl<W: Write + Seek> XlsxWriter<W> {
             CellValue::Duration(secs) => {
                 let idx = self.add_shared_string(&format!("{secs}s"));
                 self.worksheet_xml.extend_from_slice(
-                    format!("<c r=\"{cell_ref}\" t=\"s\"><v>{idx}</v></c>\n").as_bytes(),
+                    format!("<c r=\"{cell_ref}\" t=\"s\"{default_style}><v>{idx}</v></c>\n").as_bytes(),
                 );
             }
             CellValue::Error(e) => {
                 self.worksheet_xml.extend_from_slice(
-                    format!("<c r=\"{cell_ref}\" t=\"e\"><v>{e}</v></c>\n").as_bytes(),
+                    format!("<c r=\"{cell_ref}\" t=\"e\"{default_style}><v>{e}</v></c>\n").as_bytes(),
                 );
             }
             CellValue::Bytes(b) => {
                 let idx = self.add_shared_string(&format!("<{} bytes>", b.len()));
                 self.worksheet_xml.extend_from_slice(
-                    format!("<c r=\"{cell_ref}\" t=\"s\"><v>{idx}</v></c>\n").as_bytes(),
+                    format!("<c r=\"{cell_ref}\" t=\"s\"{default_style}><v>{idx}</v></c>\n").as_bytes(),
                 );
             }
         }
@@ -291,12 +304,26 @@ impl<W: Write + Seek> XlsxWriter<W> {
         self.worksheet_xml.extend_from_slice(b"</sheetData>\n");
 
         // Add freeze pane for header row if configured
-        if self.config.xlsx.freeze_header && self.config.headers.is_some() {
+        let style_resolved = self.config.xlsx.style.resolve();
+        let freeze_header = self.config.xlsx.freeze_header || style_resolved.freeze_header;
+        if freeze_header && self.config.headers.is_some() {
             self.worksheet_xml.extend_from_slice(
                 b"<sheetViews><sheetView tabSelected=\"1\" workbookViewId=\"0\">\
                   <pane ySplit=\"1\" topLeftCell=\"A2\" activePane=\"bottomLeft\" state=\"frozen\"/>\
                   </sheetView></sheetViews>\n",
             );
+        }
+
+        // Add autoFilter if configured
+        let auto_filter = self.config.xlsx.auto_filter || style_resolved.auto_filter;
+        if auto_filter && self.config.headers.is_some() && self.current_row_num > 0 {
+            if let Some(ref headers) = self.config.headers {
+                let last_col = column_index_to_letter(headers.len() - 1);
+                let last_row = self.current_row_num;
+                self.worksheet_xml.extend_from_slice(
+                    format!("<autoFilter ref=\"A1:{last_col}{last_row}\"/>\n").as_bytes()
+                );
+            }
         }
 
         self.worksheet_xml.extend_from_slice(b"</worksheet>\n");
@@ -332,10 +359,11 @@ impl<W: Write + Seek> XlsxWriter<W> {
             .start_file("xl/workbook.xml", options)?;
         self.zip.write_all(workbook_xml.as_bytes())?;
 
-        // Write xl/styles.xml (with date format)
+        // Write xl/styles.xml (with date format & style template support)
         self.zip
             .start_file("xl/styles.xml", options)?;
-        self.zip.write_all(STYLES_XML)?;
+        let styles_xml_content = self.config.xlsx.style.to_styles_xml();
+        self.zip.write_all(styles_xml_content.as_bytes())?;
 
         // Write xl/sharedStrings.xml
         self.zip
@@ -436,22 +464,6 @@ const WORKBOOK_RELS_XML: &[u8] = br#"<?xml version="1.0" encoding="UTF-8" standa
 <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
 </Relationships>"#;
 
-const STYLES_XML: &[u8] = br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<numFmts count="2">
-<numFmt numFmtId="164" formatCode="yyyy-mm-dd hh:mm:ss"/>
-<numFmt numFmtId="165" formatCode="hh:mm:ss"/>
-</numFmts>
-<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>
-<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
-<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
-<cellXfs count="3">
-<xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
-<xf numFmtId="164" fontId="0" fillId="0" borderId="0" applyNumberFormat="1"/>
-<xf numFmtId="165" fontId="0" fillId="0" borderId="0" applyNumberFormat="1"/>
-</cellXfs>
-</styleSheet>"#;
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -505,5 +517,28 @@ mod tests {
 
         let rows = writer.finish().unwrap();
         assert_eq!(rows, 1);
+    }
+
+    #[test]
+    fn test_xlsx_write_with_style_template() {
+        let config = WriterConfig::default()
+            .with_headers(vec!["Name".into(), "Value".into()])
+            .with_style_template(StyleTemplate::Professional);
+
+        let buffer = Cursor::new(Vec::new());
+        let mut writer = XlsxWriter::new(buffer, config).unwrap();
+
+        let mut row1 = Row::new(0);
+        row1.push(CellValue::from("test1"));
+        row1.push(CellValue::from(42_i64));
+        writer.write_row(&row1).unwrap();
+
+        let mut row2 = Row::new(1);
+        row2.push(CellValue::from("test2"));
+        row2.push(CellValue::from(43_i64));
+        writer.write_row(&row2).unwrap();
+
+        let rows = writer.finish().unwrap();
+        assert_eq!(rows, 2);
     }
 }

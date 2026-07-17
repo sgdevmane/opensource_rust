@@ -198,6 +198,14 @@ impl DataForgeError {
         }
     }
 
+    /// Create an XLSX parse error.
+    pub fn xlsx_parse(component: impl Into<String>, message: impl Into<String>) -> Self {
+        DataForgeError::XlsxParse {
+            component: component.into(),
+            message: message.into(),
+        }
+    }
+
     /// Create an internal error (indicates a bug).
     pub fn internal(message: impl Into<String>) -> Self {
         DataForgeError::Internal {

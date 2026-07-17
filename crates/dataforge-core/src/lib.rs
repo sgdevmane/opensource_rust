@@ -89,6 +89,9 @@ pub mod formula;
 /// Streaming JSON/JSONL reader.
 pub mod json;
 
+/// Apache Arrow integration and IPC export.
+pub mod arrow;
+
 /// Core data types: CellValue, Row, RowBatch, ColumnSchema, DataType.
 pub mod types;
 
@@ -103,4 +106,5 @@ pub use config::{FileFormat, ReaderConfig, WriterConfig};
 pub use error::{DataForgeError, Result};
 pub use formula::FormulaEvaluator;
 pub use json::JsonReader;
+pub use arrow::ArrowIpcWriter;
 pub use types::{CellValue, ColumnSchema, DataType, Row, RowBatch, SheetMetadata};

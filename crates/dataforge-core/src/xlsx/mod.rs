@@ -22,6 +22,12 @@ pub mod reader;
 pub mod shared_strings;
 pub mod styles;
 pub mod writer;
+pub mod decrypt;
+pub mod encrypt;
+pub mod style_templates;
 
 pub use reader::XlsxReader;
 pub use writer::XlsxWriter;
+pub use decrypt::XlsxDecrypter;
+pub use encrypt::encrypt_xlsx;
+pub use style_templates::StyleTemplate;

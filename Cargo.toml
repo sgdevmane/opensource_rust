@@ -89,6 +89,18 @@ tempfile = "3"
 # Number parsing — fast float/int parsing
 lexical-core = "1"
 
+# Apache Arrow support
+arrow = { version = "53", features = ["ipc"] }
+
+# Encryption & Compound File Binary (CFB) for ECMA-376 decryption
+cfb = "0.10"
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+sha2 = "0.10"
+pbkdf2 = "0.12"
+hmac = "0.12"
+base64 = "0.22"
+
 # ---------------------------------------------------------------------------
 # Workspace-wide profile settings
 # ---------------------------------------------------------------------------

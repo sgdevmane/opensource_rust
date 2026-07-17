@@ -88,6 +88,52 @@ impl PyRowBatch {
             Ok(list)
         })
     }
+
+    /// Convert the batch to a dictionary of columns (highly optimized for Pandas/Polars).
+    pub fn to_column_dict(&self) -> PyResult<PyObject> {
+        Python::with_gil(|py| {
+            let headers = self.inner.headers.as_ref();
+            let num_rows = self.inner.len();
+            let num_cols = headers.map(|h| h.len()).unwrap_or(0);
+
+            let dict = pyo3::types::PyDict::new_bound(py);
+            if num_rows == 0 {
+                return Ok(dict.into());
+            }
+
+            // Transpose row-major cells into column-major vectors
+            let mut columns = vec![Vec::with_capacity(num_rows); num_cols];
+            for row in &self.inner.rows {
+                for (col_idx, cell) in row.cells.iter().enumerate() {
+                    if col_idx < num_cols {
+                        columns[col_idx].push(cell);
+                    }
+                }
+            }
+
+            for col_idx in 0..num_cols {
+                let col_name = headers
+                    .and_then(|h| h.get(col_idx))
+                    .map(|s| s.clone())
+                    .unwrap_or_else(|| format!("col_{}", col_idx));
+
+                let col_vec: Vec<PyObject> = columns[col_idx]
+                    .iter()
+                    .map(|cell| match cell {
+                        CellValue::Null => py.None(),
+                        CellValue::Bool(b) => b.into_py(py),
+                        CellValue::Int(i) => i.into_py(py),
+                        CellValue::Float(f) => f.into_py(py),
+                        _ => cell.to_display_string().into_py(py),
+                    })
+                    .collect();
+
+                dict.set_item(col_name, col_vec)?;
+            }
+
+            Ok(dict.into())
+        })
+    }
 }
 
 /// Streaming CSV reader for Python.

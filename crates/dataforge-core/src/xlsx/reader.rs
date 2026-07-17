@@ -25,6 +25,7 @@ use zip::ZipArchive;
 
 use super::shared_strings::SharedStrings;
 use super::styles::Styles;
+use super::decrypt::XlsxDecrypter;
 use crate::config::{DateSystem, ReaderConfig, SheetSelector};
 use crate::error::{DataForgeError, Result};
 use crate::memory::MemoryTracker;
@@ -72,7 +73,7 @@ pub struct XlsxReader {
     headers: Option<Vec<String>>,
 
     /// Memory tracker for backpressure
-    _memory_tracker: Arc<MemoryTracker>,
+    memory_tracker: Arc<MemoryTracker>,
 
     /// Sheet metadata
     sheet_metadata: SheetMetadata,
@@ -119,11 +120,27 @@ impl XlsxReader {
 
         info!(path = %path.display(), "Opening XLSX file");
 
-        let file = File::open(path).map_err(|e| {
+        let mut file = File::open(path).map_err(|e| {
             DataForgeError::io(e, format!("Failed to open XLSX file '{}'", path.display()))
         })?;
-        let buf_reader = BufReader::with_capacity(64 * 1024, file);
 
+        // Read first 8 bytes to check if encrypted
+        let mut magic = [0u8; 8];
+        let bytes_read = file.read(&mut magic).unwrap_or(0);
+        use std::io::Seek;
+        file.seek(std::io::SeekFrom::Start(0))?;
+
+        if bytes_read == 8 && XlsxDecrypter::is_encrypted(&magic) {
+            let mut encrypted_bytes = Vec::new();
+            file.read_to_end(&mut encrypted_bytes)?;
+            let password = config.xlsx.password.as_deref().ok_or_else(|| {
+                DataForgeError::config("File is encrypted. Please specify a password.")
+            })?;
+            let decrypted_bytes = XlsxDecrypter::decrypt(&encrypted_bytes, password)?;
+            return Self::from_bytes(decrypted_bytes, config);
+        }
+
+        let buf_reader = BufReader::with_capacity(64 * 1024, file);
         Self::from_reader(buf_reader, config)
     }
 
@@ -131,6 +148,14 @@ impl XlsxReader {
     ///
     /// Primary entry point for WASM and FFI consumers.
     pub fn from_bytes(data: Vec<u8>, config: ReaderConfig) -> Result<Self> {
+        if XlsxDecrypter::is_encrypted(&data) {
+            let password = config.xlsx.password.as_deref().ok_or_else(|| {
+                DataForgeError::config("File is encrypted. Please specify a password.")
+            })?;
+            let decrypted_bytes = XlsxDecrypter::decrypt(&data, password)?;
+            let cursor = std::io::Cursor::new(decrypted_bytes);
+            return Self::from_reader(cursor, config);
+        }
         let cursor = std::io::Cursor::new(data);
         Self::from_reader(cursor, config)
     }
@@ -205,7 +230,7 @@ impl XlsxReader {
                 headers_read: false,
             },
             headers: None,
-            _memory_tracker: memory_tracker,
+            memory_tracker: memory_tracker,
             sheet_metadata,
             config,
             date_system,
@@ -221,6 +246,11 @@ impl XlsxReader {
     /// Get sheet metadata.
     pub fn sheet_metadata(&self) -> &SheetMetadata {
         &self.sheet_metadata
+    }
+
+    /// Get current memory stats.
+    pub fn memory_stats(&self) -> crate::memory::MemoryStats {
+        self.memory_tracker.stats()
     }
 
     /// Get all sheet names from the workbook.

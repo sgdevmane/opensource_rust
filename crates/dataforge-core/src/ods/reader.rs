@@ -54,7 +54,7 @@ pub struct OdsReader {
     headers: Option<Vec<String>>,
 
     /// Memory tracker
-    _memory_tracker: Arc<MemoryTracker>,
+    memory_tracker: Arc<MemoryTracker>,
 
     /// Configuration
     config: ReaderConfig,
@@ -134,7 +134,7 @@ impl OdsReader {
             content_data,
             byte_offset: 0,
             headers: None,
-            _memory_tracker: memory_tracker,
+            memory_tracker,
             config,
             sheet_metadata: SheetMetadata {
                 name: "Sheet1".to_string(),
@@ -155,6 +155,11 @@ impl OdsReader {
     /// Get column headers.
     pub fn headers(&self) -> Option<&[String]> {
         self.headers.as_deref()
+    }
+
+    /// Get current memory stats.
+    pub fn memory_stats(&self) -> crate::memory::MemoryStats {
+        self.memory_tracker.stats()
     }
 
     /// Read the next batch of rows.

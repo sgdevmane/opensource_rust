@@ -168,7 +168,60 @@ Build static and dynamic C libraries:
 cd crates/dataforge-ffi
 cargo build --release
 ```
-This produces `libdataforge_ffi.a` (static) and `libdataforge_ffi.so` / `libdataforge_ffi.dylib` (dynamic) along with generated header files using `cbindgen` to link in C/C++, Go, or Python `ctypes`.
+This produces `libdataforge_ffi.a` (static) and `libdataforge_ffi.so` / `libdataforge_ffi.dylib` (dynamic) and automatically generates the header file `crates/dataforge-ffi/include/dataforge.h` using `cbindgen` to link in C/C++, Go, or Python `ctypes`.
+
+---
+
+## Advanced Features & Core Upgrades
+
+DataForge is packed with production-ready, premium-grade features:
+
+### 1. Password Protected XLSX Decryption & Encryption
+Transparently handles ECMA-376 Agile password-protected spreadsheets:
+- **Decryption**: Provide the decryption password in the configuration:
+  ```rust
+  let config = ReaderConfig::default().with_password("my_secure_password");
+  let reader = XlsxReader::open("encrypted.xlsx", config)?;
+  ```
+- **Encryption**: Export unencrypted XLSX payloads to password-protected OLE documents:
+  ```rust
+  dataforge_core::xlsx::encrypt_xlsx(&xlsx_bytes, "password", &mut file)?;
+  ```
+
+### 2. Composable Transformation Pipelines
+Lazily build high-performance data processing pipelines:
+```rust
+use dataforge_core::transform::pipeline::Pipeline;
+use dataforge_core::transform::filter::{ColumnFilter, ComparisonOp};
+
+let pipeline = Pipeline::new()
+    .filter("Age", ComparisonOp::GreaterThan, CellValue::from(30_i64))
+    .rename_column("Name", "Full Name")
+    .select_columns(vec!["Full Name".to_string(), "Age".to_string()]);
+```
+
+### 3. Disk-Buffered Sorting & Incremental Runs
+Sort datasets larger than memory using external merge sort:
+```rust
+// Sorts by column "Age" descending using temporary disk runs
+let mut sorted_reader = reader.external_sort("Age", false)?;
+```
+
+### 4. Excel Styling Templates
+Generate beautifully styled workbooks instantly with professional styling presets:
+```rust
+use dataforge_core::xlsx::StyleTemplate;
+
+let config = WriterConfig::default()
+    .with_style_template(StyleTemplate::Professional); // Navy headers, zebra shading, frozen headers, auto-filters
+```
+
+### 5. Observability (Prometheus & Grafana)
+Memory consumption is fully instrumented for system telemetry:
+```rust
+// Export memory statistics in Prometheus text exposition format
+let metrics_payload = memory_tracker.to_prometheus();
+```
 
 ---
 

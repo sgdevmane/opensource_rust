@@ -82,6 +82,18 @@ regex = { workspace = true }
 # --- Temporary files (for external merge sort) ---
 tempfile = { workspace = true }
 
+# --- Apache Arrow ---
+arrow = { workspace = true }
+
+# --- Encryption & CFB Decryption ---
+cfb = { workspace = true }
+aes = { workspace = true }
+cbc = { workspace = true }
+sha2 = { workspace = true }
+pbkdf2 = { workspace = true }
+hmac = { workspace = true }
+base64 = { workspace = true }
+
 [dev-dependencies]
 criterion = { workspace = true }
 tempfile = { workspace = true }
@@ -94,3 +106,15 @@ harness = false
 [[bench]]
 name = "xlsx_read"
 harness = false
+
+[[example]]
+name = "basic_csv_read"
+path = "../../examples/rust/basic_csv_read.rs"
+
+[[example]]
+name = "basic_xlsx_read"
+path = "../../examples/rust/basic_xlsx_read.rs"
+
+[[example]]
+name = "advanced_features"
+path = "../../examples/rust/advanced_features.rs"
