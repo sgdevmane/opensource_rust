@@ -168,6 +168,9 @@ pub struct OdsConfig {
 
     /// Whether to include empty rows in output (default: false)
     pub include_empty_rows: bool,
+
+    /// Password for decrypting password-protected ODS workbooks
+    pub password: Option<String>,
 }
 
 impl Default for OdsConfig {
@@ -175,6 +178,7 @@ impl Default for OdsConfig {
         OdsConfig {
             sheet_selector: SheetSelector::First,
             include_empty_rows: false,
+            password: None,
         }
     }
 }
@@ -447,9 +451,11 @@ impl ReaderConfig {
         self
     }
 
-    /// Set password for decrypting password-protected XLSX files.
+    /// Set password for decrypting password-protected XLSX and ODS files.
     pub fn with_password(mut self, password: impl Into<String>) -> Self {
-        self.xlsx.password = Some(password.into());
+        let p = password.into();
+        self.xlsx.password = Some(p.clone());
+        self.ods.password = Some(p);
         self
     }
 

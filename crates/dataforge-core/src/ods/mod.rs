@@ -10,6 +10,8 @@
 
 pub mod reader;
 pub mod writer;
+pub mod decrypt;
 
 pub use reader::OdsReader;
 pub use writer::OdsWriter;
+pub use decrypt::{parse_manifest_encryption, decrypt_ods_entry};

@@ -81,9 +81,11 @@ regex = { workspace = true }
 
 # --- Temporary files (for external merge sort) ---
 tempfile = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
 
 # --- Apache Arrow ---
 arrow = { workspace = true }
+parquet = { workspace = true }
 
 # --- Encryption & CFB Decryption ---
 cfb = { workspace = true }

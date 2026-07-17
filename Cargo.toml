@@ -85,12 +85,14 @@ criterion = { version = "0.5", features = ["html_reports"] }
 
 # Testing utilities
 tempfile = "3"
+uuid = "1"
 
 # Number parsing — fast float/int parsing
 lexical-core = "1"
 
 # Apache Arrow support
 arrow = { version = "53", features = ["ipc"] }
+parquet = { version = "53", default-features = false, features = ["arrow"] }
 
 # Encryption & Compound File Binary (CFB) for ECMA-376 decryption
 cfb = "0.10"

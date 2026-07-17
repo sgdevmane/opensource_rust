@@ -648,6 +648,110 @@ impl ColumnSchema {
     }
 }
 
+/// Column-wise compression (RLE/Dict) to optimize memory footprints.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CompressedColumn {
+    /// Uncompressed column payload.
+    Uncompressed(Vec<CellValue>),
+    /// Run-length encoded column layout.
+    Rle {
+        values: Vec<CellValue>,
+        lengths: Vec<u32>,
+    },
+    /// Dictionary-encoded column layout.
+    Dictionary {
+        keys: Vec<u32>,
+        values: Vec<CellValue>,
+    },
+}
+
+impl CompressedColumn {
+    /// Compress a slice of CellValues into an RLE, Dictionary, or Uncompressed variant.
+    pub fn compress(values: &[CellValue]) -> Self {
+        if values.is_empty() {
+            return CompressedColumn::Uncompressed(Vec::new());
+        }
+
+        // Try RLE compression
+        let mut rle_values = Vec::new();
+        let mut rle_lengths = Vec::new();
+        let mut last_val = &values[0];
+        let mut run_len = 1u32;
+
+        for val in &values[1..] {
+            if val == last_val {
+                run_len += 1;
+            } else {
+                rle_values.push(last_val.clone());
+                rle_lengths.push(run_len);
+                last_val = val;
+                run_len = 1;
+            }
+        }
+        rle_values.push(last_val.clone());
+        rle_lengths.push(run_len);
+
+        let rle_footprint = rle_values.len() * std::mem::size_of::<CellValue>() + rle_lengths.len() * 4;
+        let raw_footprint = values.len() * std::mem::size_of::<CellValue>();
+
+        // Try Dictionary compression
+        let mut dict_values = Vec::new();
+        let mut dict_keys = Vec::new();
+        for val in values {
+            if let Some(pos) = dict_values.iter().position(|x| x == val) {
+                dict_keys.push(pos as u32);
+            } else {
+                let pos = dict_values.len();
+                dict_values.push(val.clone());
+                dict_keys.push(pos as u32);
+            }
+        }
+
+        let dict_footprint = dict_values.len() * std::mem::size_of::<CellValue>() + dict_keys.len() * 4;
+
+        if rle_footprint < raw_footprint && rle_footprint < dict_footprint {
+            CompressedColumn::Rle {
+                values: rle_values,
+                lengths: rle_lengths,
+            }
+        } else if dict_footprint < raw_footprint {
+            CompressedColumn::Dictionary {
+                keys: dict_keys,
+                values: dict_values,
+            }
+        } else {
+            CompressedColumn::Uncompressed(values.to_vec())
+        }
+    }
+
+    /// Decompress a column layout back into a vector of raw CellValues.
+    pub fn decompress(&self) -> Vec<CellValue> {
+        match self {
+            CompressedColumn::Uncompressed(v) => v.clone(),
+            CompressedColumn::Rle { values, lengths } => {
+                let mut out = Vec::new();
+                for (val, &len) in values.iter().zip(lengths.iter()) {
+                    for _ in 0..len {
+                        out.push(val.clone());
+                    }
+                }
+                out
+            }
+            CompressedColumn::Dictionary { keys, values } => {
+                let mut out = Vec::new();
+                for &key in keys {
+                    if let Some(val) = values.get(key as usize) {
+                        out.push(val.clone());
+                    } else {
+                        out.push(CellValue::Null);
+                    }
+                }
+                out
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -740,5 +844,33 @@ mod tests {
         let none_val: CellValue = Option::<i64>::None.into();
         assert_eq!(some_val, CellValue::Int(42));
         assert_eq!(none_val, CellValue::Null);
+    }
+
+    #[test]
+    fn test_column_compression() {
+        // Test RLE compression
+        let values_rle = vec![
+            CellValue::from("status_active"),
+            CellValue::from("status_active"),
+            CellValue::from("status_active"),
+            CellValue::from("status_pending"),
+            CellValue::from("status_pending"),
+        ];
+        let compressed_rle = CompressedColumn::compress(&values_rle);
+        assert!(matches!(compressed_rle, CompressedColumn::Rle { .. }));
+        assert_eq!(compressed_rle.decompress(), values_rle);
+
+        // Test Dictionary compression
+        let values_dict = vec![
+            CellValue::from("A"),
+            CellValue::from("B"),
+            CellValue::from("A"),
+            CellValue::from("C"),
+            CellValue::from("B"),
+            CellValue::from("C"),
+        ];
+        let compressed_dict = CompressedColumn::compress(&values_dict);
+        assert!(matches!(compressed_dict, CompressedColumn::Dictionary { .. }));
+        assert_eq!(compressed_dict.decompress(), values_dict);
     }
 }

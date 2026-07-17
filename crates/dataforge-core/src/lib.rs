@@ -98,6 +98,12 @@ pub mod types;
 /// Streaming XLSX (Excel 2007+) reader and writer.
 pub mod xlsx;
 
+/// Apache Parquet streaming integration.
+pub mod parquet;
+
+/// Delta Lake exporter.
+pub mod delta;
+
 // =============================================================================
 // Re-exports for convenient access
 // =============================================================================
@@ -107,4 +113,6 @@ pub use error::{DataForgeError, Result};
 pub use formula::FormulaEvaluator;
 pub use json::JsonReader;
 pub use arrow::ArrowIpcWriter;
+pub use parquet::{ParquetReader, ParquetWriter};
+pub use delta::DeltaLakeExporter;
 pub use types::{CellValue, ColumnSchema, DataType, Row, RowBatch, SheetMetadata};

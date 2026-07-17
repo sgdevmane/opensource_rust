@@ -83,7 +83,7 @@ impl<W: Write> ArrowIpcWriter<W> {
     }
 }
 
-fn infer_arrow_schema(batch: &RowBatch) -> Result<Schema> {
+pub fn infer_arrow_schema(batch: &RowBatch) -> Result<Schema> {
     let headers = batch.headers.as_ref().ok_or_else(|| {
         DataForgeError::config("Cannot write to Arrow without column headers")
     })?;
@@ -116,7 +116,7 @@ fn infer_arrow_schema(batch: &RowBatch) -> Result<Schema> {
     Ok(Schema::new(fields))
 }
 
-fn row_batch_to_arrow_columns(batch: &RowBatch, schema: &Schema) -> Result<Vec<ArrayRef>> {
+pub fn row_batch_to_arrow_columns(batch: &RowBatch, schema: &Schema) -> Result<Vec<ArrayRef>> {
     let num_rows = batch.len();
     let mut builders: Vec<Box<dyn std::any::Any>> = Vec::with_capacity(schema.fields().len());
 

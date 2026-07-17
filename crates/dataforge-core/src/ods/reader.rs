@@ -107,7 +107,7 @@ impl OdsReader {
         let mut archive = ZipArchive::new(reader)?;
 
         // Read content.xml
-        let content_data = {
+        let mut content_data = {
             let mut file = archive.by_name("content.xml").map_err(|e| {
                 DataForgeError::OdsParse {
                     component: "archive".to_string(),
@@ -118,6 +118,19 @@ impl OdsReader {
             file.read_to_end(&mut data)?;
             data
         };
+
+        // Decrypt content.xml if password protected in META-INF/manifest.xml
+        if let Ok(mut manifest_file) = archive.by_name("META-INF/manifest.xml") {
+            let mut manifest_data = Vec::with_capacity(manifest_file.size() as usize);
+            if manifest_file.read_to_end(&mut manifest_data).is_ok() {
+                if let Ok(Some(enc_info)) = super::decrypt::parse_manifest_encryption(&manifest_data, "content.xml") {
+                    let password = config.ods.password.as_deref().ok_or_else(|| {
+                        DataForgeError::config("ODS workbook is encrypted but no password was provided")
+                    })?;
+                    content_data = super::decrypt::decrypt_ods_entry(&content_data, password, &enc_info)?;
+                }
+            }
+        }
 
         // Determine target sheet
         let target_sheet = match &config.ods.sheet_selector {

@@ -19,5 +19,10 @@
   "devDependencies": {
     "@napi-rs/cli": "^2.18.0"
   },
-  "license": "MIT OR Apache-2.0"
+  "license": "MIT OR Apache-2.0",
+  "optionalDependencies": {
+    "dataforge-native-win32-x64-msvc": "0.1.0",
+    "dataforge-native-darwin-x64": "0.1.0",
+    "dataforge-native-linux-x64-gnu": "0.1.0"
+  }
 }
