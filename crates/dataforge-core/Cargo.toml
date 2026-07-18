@@ -96,6 +96,9 @@ pbkdf2 = { workspace = true }
 hmac = { workspace = true }
 base64 = { workspace = true }
 
+# --- WebAssembly interpreter for custom plugins ---
+wasmi = "0.31"
+
 [dev-dependencies]
 criterion = { workspace = true }
 tempfile = { workspace = true }

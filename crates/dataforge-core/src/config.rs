@@ -319,6 +319,9 @@ pub struct ReaderConfig {
 
     /// Custom cell values that represent Null/empty cells
     pub null_values: Option<Vec<String>>,
+
+    /// Whether to dynamically scale batch sizes to prevent OOM/exhaustion
+    pub auto_tune_batch_size: bool,
 }
 
 impl Default for ReaderConfig {
@@ -341,6 +344,7 @@ impl Default for ReaderConfig {
             ods: OdsConfig::default(),
             inference_sample_size: 1000,
             null_values: None,
+            auto_tune_batch_size: false,
         }
     }
 }
@@ -354,6 +358,24 @@ impl ReaderConfig {
     pub fn with_batch_size(mut self, size: usize) -> Self {
         self.batch_size = size.max(1); // Minimum 1 row per batch
         self
+    }
+
+    /// Enable or disable dynamic batch size scaling based on memory footprint.
+    pub fn with_auto_tune_batch_size(mut self, enabled: bool) -> Self {
+        self.auto_tune_batch_size = enabled;
+        self
+    }
+
+    /// Dynamically adjust batch size based on memory usage of the last batch.
+    pub fn tune_batch_size(&self, current_size: usize, batch_mem_bytes: usize) -> usize {
+        let target_batch_mem = self.max_memory_bytes / 50; // Target: roughly 2% of max memory limit
+        if batch_mem_bytes > target_batch_mem * 2 {
+            (current_size / 2).max(128)
+        } else if batch_mem_bytes < target_batch_mem / 2 {
+            (current_size + current_size / 5).min(65536)
+        } else {
+            current_size
+        }
     }
 
     /// Set the maximum memory usage in megabytes.

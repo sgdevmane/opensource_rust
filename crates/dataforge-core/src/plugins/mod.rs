@@ -1,11 +1,9 @@
 // =============================================================================
-// DataForge Core — Formula Module
+// DataForge Core — Plugins Module
 // =============================================================================
-// Spreadsheet formula parsing and evaluation engine.
+// Custom user extension plugins using WebAssembly.
 // =============================================================================
 
-pub mod eval;
-pub mod sql;
+pub mod wasm;
 
-pub use eval::FormulaEvaluator;
-pub use sql::SqlEngine;
+pub use wasm::WasmPlugin;

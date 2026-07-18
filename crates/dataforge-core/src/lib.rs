@@ -86,6 +86,9 @@ pub mod transform;
 /// Spreadsheet formula evaluation engine.
 pub mod formula;
 
+/// Custom WASM plugin engine
+pub mod plugins;
+
 /// Streaming JSON/JSONL reader.
 pub mod json;
 
@@ -110,7 +113,8 @@ pub mod delta;
 
 pub use config::{FileFormat, ReaderConfig, WriterConfig};
 pub use error::{DataForgeError, Result};
-pub use formula::FormulaEvaluator;
+pub use formula::{FormulaEvaluator, SqlEngine};
+pub use plugins::WasmPlugin;
 pub use json::JsonReader;
 pub use arrow::ArrowIpcWriter;
 pub use parquet::{ParquetReader, ParquetWriter};

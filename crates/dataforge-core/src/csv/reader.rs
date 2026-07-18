@@ -75,6 +75,9 @@ pub struct CsvReader {
 
     /// Configuration snapshot
     config: ReaderConfig,
+
+    /// Dynamic batch size determined by auto-tuning (or initial batch_size)
+    current_batch_size: usize,
 }
 
 /// Internal implementation — either sequential or parallel mode.
@@ -277,6 +280,7 @@ impl CsvReader {
             None
         };
 
+        let batch_size = config.batch_size;
         // Use a different enum variant for bytes reading
         Ok(CsvReader {
             inner: CsvReaderInner::Bytes(BytesReader {
@@ -288,6 +292,7 @@ impl CsvReader {
             memory_tracker,
             exhausted: false,
             config,
+            current_batch_size: batch_size,
         })
     }
 
@@ -341,6 +346,7 @@ impl CsvReader {
             "CSV sequential reader initialized"
         );
 
+        let batch_size = config.batch_size;
         Ok(CsvReader {
             inner: CsvReaderInner::Sequential(SequentialReader {
                 reader,
@@ -351,6 +357,7 @@ impl CsvReader {
             memory_tracker,
             exhausted: false,
             config,
+            current_batch_size: batch_size,
         })
     }
 
@@ -487,12 +494,14 @@ impl CsvReader {
             // Channel closes when sender is dropped
         });
 
+        let batch_size = config.batch_size;
         Ok(CsvReader {
             inner: CsvReaderInner::Parallel(ParallelReader { receiver }),
             headers,
             memory_tracker,
             exhausted: false,
             config,
+            current_batch_size: batch_size,
         })
     }
 
@@ -517,10 +526,10 @@ impl CsvReader {
 
         let mut result = match &mut self.inner {
             CsvReaderInner::Sequential(seq) => {
-                Self::read_sequential_batch(seq, &self.config, &self.headers)
+                Self::read_sequential_batch(seq, &self.config, &self.headers, self.current_batch_size)
             }
             CsvReaderInner::Bytes(seq) => {
-                Self::read_bytes_batch(seq, &self.config, &self.headers)
+                Self::read_bytes_batch(seq, &self.config, &self.headers, self.current_batch_size)
             }
             CsvReaderInner::Parallel(par) => {
                 match par.receiver.recv() {
@@ -531,6 +540,10 @@ impl CsvReader {
         };
 
         if let Some(Ok(ref mut batch)) = result {
+            if self.config.auto_tune_batch_size {
+                let mem_bytes = batch.estimated_memory_bytes();
+                self.current_batch_size = self.config.tune_batch_size(self.current_batch_size, mem_bytes);
+            }
             if let Err(e) = crate::schema::apply_schema(batch, &self.config) {
                 result = Some(Err(e));
             }
@@ -550,8 +563,8 @@ impl CsvReader {
         seq: &mut SequentialReader,
         config: &ReaderConfig,
         headers: &Option<Vec<String>>,
+        batch_size: usize,
     ) -> Option<Result<RowBatch>> {
-        let batch_size = config.batch_size;
         let mut batch = RowBatch::with_capacity(seq.row_index, batch_size);
         batch.headers = headers.clone();
 
@@ -608,8 +621,8 @@ impl CsvReader {
         seq: &mut BytesReader,
         config: &ReaderConfig,
         headers: &Option<Vec<String>>,
+        batch_size: usize,
     ) -> Option<Result<RowBatch>> {
-        let batch_size = config.batch_size;
         let mut batch = RowBatch::with_capacity(seq.row_index, batch_size);
         batch.headers = headers.clone();
 
@@ -1109,5 +1122,26 @@ mod tests {
         assert_eq!(parse_cell_value("NULL", &nulls), CellValue::Null);
         assert_eq!(parse_cell_value("\\N", &nulls), CellValue::Null);
         assert_eq!(parse_cell_value("Normal", &nulls), CellValue::from("Normal"));
+    }
+
+    #[test]
+    fn test_auto_tune_batch_size() {
+        let data = b"name,age,city\nAlice,30,NYC\nBob,25,LA\nCharlie,35,SF\n";
+        // Enable auto_tune and set small memory limit to trigger downscale or test scaling logic
+        let config = ReaderConfig::default()
+            .with_batch_size(100)
+            .with_max_memory_mb(1) // 1MB limit
+            .with_auto_tune_batch_size(true);
+
+        let mut reader = CsvReader::from_bytes(data.to_vec(), config).unwrap();
+        assert_eq!(reader.current_batch_size, 100);
+
+        // Next batch should trigger auto tuning logic
+        let batch = reader.next_batch().unwrap().unwrap();
+        assert_eq!(batch.len(), 3);
+        
+        // Since the batch memory size is extremely tiny compared to 1MB (1024*1024 / 50 = ~20KB),
+        // it should scale up the batch size!
+        assert!(reader.current_batch_size > 100);
     }
 }

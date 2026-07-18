@@ -1,6 +1,6 @@
-# Contributing to DataForge
+# Contributing to SpreadsheetParser
 
-Thank you for considering contributing to DataForge! This document provides guidelines
+Thank you for considering contributing to SpreadsheetParser! This document provides guidelines
 and instructions for contributing to the project.
 
 ## Table of Contents
@@ -34,8 +34,8 @@ Be respectful, constructive, and collaborative.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/dataforge.git
-cd dataforge
+git clone https://github.com/sgdevmane/spreadsheet_parser.git
+cd spreadsheet_parser
 
 # Build the entire workspace
 cargo build --workspace
@@ -91,7 +91,7 @@ cargo bench --workspace -- --output-format html
 ## Project Architecture
 
 ```
-dataforge/
+spreadsheet_parser/
 ├── crates/
 │   ├── dataforge-core/      # Pure Rust core — ALL logic lives here
 │   │   ├── src/

@@ -1,12 +1,12 @@
-# DataForge 🚀
+# SpreadsheetParser 🚀
 
-DataForge is a high-performance, memory-bounded, cross-language streaming spreadsheet engine written in Rust. It allows developers in any language—including Node.js, Python, C/C++, and WebAssembly (browsers/Edge)—to parse, write, and manipulate massive spreadsheet datasets (100k+ to millions of rows in CSV, XLSX, and ODS formats) with constant memory usage, avoiding Out-Of-Memory (OOM) crashes.
+SpreadsheetParser is a high-performance, memory-bounded, cross-language streaming spreadsheet engine written in Rust. It allows developers in any language—including Node.js, Python, C/C++, and WebAssembly (browsers/Edge)—to parse, write, and manipulate massive spreadsheet datasets (100k+ to millions of rows in CSV, XLSX, and ODS formats) with constant memory usage, avoiding Out-Of-Memory (OOM) crashes.
 
 ---
 
-## Why DataForge Wins
+## Why SpreadsheetParser Wins
 
-- **Memory-Bounded Operations**: DataForge operates on a configurable memory ceiling (e.g. 256MB) and employs a thread-safe atomic backpressure mechanism. If memory utilization is high, producer threads are blocked or throttled, guaranteeing constant memory consumption.
+- **Memory-Bounded Operations**: SpreadsheetParser operates on a configurable memory ceiling (e.g. 256MB) and employs a thread-safe atomic backpressure mechanism. If memory utilization is high, producer threads are blocked or throttled, guaranteeing constant memory consumption.
 - **Zero-Copy & SIMD Parsing**: Utilizes memory-mapped files via `memmap2` and SIMD-accelerated scanning (`memchr`) to process delimiters and boundaries at raw hardware speed.
 - **Multi-Core Scaling**: Parallelizes CSV chunk boundaries dynamically across available CPU cores via Rayon's work-stealing scheduler.
 - **True SAX XML Parsing**: XLSX and ODS streaming parsers read ZIP xml elements row-by-row, resolving shared strings lazily without ever holding a full XML DOM in memory.
@@ -25,7 +25,7 @@ DataForge is a high-performance, memory-bounded, cross-language streaming spread
 The workspace is organized as a Cargo workspace with 5 specialized crates:
 
 ```
-opensource_rust/
+spreadsheet_parser/
 ├── Cargo.toml                    # Workspace root Cargo manifest
 ├── LICENSE-MIT                   # MIT License
 ├── LICENSE-APACHE                # Apache 2.0 License
@@ -179,7 +179,7 @@ This produces `libdataforge_ffi.a` (static) and `libdataforge_ffi.so` / `libdata
 
 ## Advanced Features & Core Upgrades
 
-DataForge is packed with production-ready, premium-grade features:
+SpreadsheetParser is packed with production-ready, premium-grade features:
 
 ### 1. Password Protected XLSX Decryption & Encryption
 Transparently handles ECMA-376 Agile password-protected spreadsheets:
