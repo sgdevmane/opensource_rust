@@ -137,7 +137,7 @@ mod tests {
         let mut batch = RowBatch::new(0);
 
         let data = vec![
-            vec![CellValue::from("Alice"), CellValue::from(30_i64), CellValue::from(3.14_f64)],
+            vec![CellValue::from("Alice"), CellValue::from(30_i64), CellValue::from(3.15_f64)],
             vec![CellValue::from("Bob"), CellValue::from(25_i64), CellValue::from(2.71_f64)],
             vec![CellValue::from("Charlie"), CellValue::from(35_i64), CellValue::from(1.41_f64)],
         ];
@@ -185,7 +185,7 @@ mod tests {
         batch.push(r1);
 
         let mut r2 = Row::new(1);
-        r2.push(CellValue::from(3.14_f64));
+        r2.push(CellValue::from(3.15_f64));
         batch.push(r2);
 
         let schema = infer_schema(&[batch], None, 100);

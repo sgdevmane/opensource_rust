@@ -74,6 +74,9 @@ pub struct XlsxWriter<W: Write + Seek> {
 
     /// Whether the worksheet has been started
     worksheet_started: bool,
+
+    /// Track column widths for auto-fitting
+    column_widths: Vec<usize>,
 }
 
 impl XlsxWriter<BufWriter<File>> {
@@ -105,6 +108,7 @@ impl<W: Write + Seek> XlsxWriter<W> {
             current_row_num: 0,
             worksheet_xml: Vec::with_capacity(1024 * 1024), // 1MB initial buffer
             worksheet_started: false,
+            column_widths: Vec::new(),
         };
 
         // Write the worksheet XML header
@@ -148,6 +152,12 @@ impl<W: Write + Seek> XlsxWriter<W> {
                 let col_letter = column_index_to_letter(col_idx);
                 let cell_ref = format!("{col_letter}{row_num}");
                 let string_idx = self.add_shared_string(header);
+
+                let val_len = header.len();
+                if col_idx >= self.column_widths.len() {
+                    self.column_widths.resize(col_idx + 1, 0);
+                }
+                self.column_widths[col_idx] = self.column_widths[col_idx].max(val_len);
 
                 // Write cell with shared string type
                 self.worksheet_xml.extend_from_slice(
@@ -202,6 +212,12 @@ impl<W: Write + Seek> XlsxWriter<W> {
 
     /// Write a single cell element to the worksheet XML.
     fn write_cell(&mut self, cell_ref: &str, value: &CellValue, row_num: u64, col_idx: usize) -> Result<()> {
+        let val_len = value.to_display_string().len();
+        if col_idx >= self.column_widths.len() {
+            self.column_widths.resize(col_idx + 1, 0);
+        }
+        self.column_widths[col_idx] = self.column_widths[col_idx].max(val_len);
+
         let is_even_row = row_num % 2 == 0;
         let has_alt_style = !matches!(self.config.xlsx.style, StyleTemplate::None);
         
@@ -426,7 +442,30 @@ impl<W: Write + Seek> XlsxWriter<W> {
         // Write xl/worksheets/sheet1.xml
         self.zip
             .start_file("xl/worksheets/sheet1.xml", options)?;
-        self.zip.write_all(&self.worksheet_xml)?;
+
+        let mut final_worksheet_xml = Vec::new();
+        if self.config.auto_column_width && !self.column_widths.is_empty() {
+            if let Some(pos) = self.worksheet_xml.windows(11).position(|w| w == b"<sheetData>") {
+                final_worksheet_xml.extend_from_slice(&self.worksheet_xml[..pos]);
+                final_worksheet_xml.extend_from_slice(b"<cols>\n");
+                for (i, &w) in self.column_widths.iter().enumerate() {
+                    let width = (w as f64 + 3.0).max(10.0).min(50.0);
+                    let col_xml = format!(
+                        "  <col min=\"{}\" max=\"{}\" width=\"{:.2}\" customWidth=\"1\"/>\n",
+                        i + 1, i + 1, width
+                    );
+                    final_worksheet_xml.extend_from_slice(col_xml.as_bytes());
+                }
+                final_worksheet_xml.extend_from_slice(b"</cols>\n");
+                final_worksheet_xml.extend_from_slice(&self.worksheet_xml[pos..]);
+            } else {
+                final_worksheet_xml = self.worksheet_xml.clone();
+            }
+        } else {
+            final_worksheet_xml = self.worksheet_xml.clone();
+        }
+
+        self.zip.write_all(&final_worksheet_xml)?;
 
         // If chart is configured, generate drawing and chart files
         if let Some(ref chart) = self.config.xlsx.chart {

@@ -12,6 +12,7 @@ use serde_json::json;
 use crate::error::Result;
 use crate::parquet::ParquetWriter;
 use crate::types::{DataType, RowBatch};
+use tracing::info;
 
 /// Delta Lake Exporter to write data to Delta tables with transaction logs.
 pub struct DeltaLakeExporter {
@@ -59,6 +60,13 @@ impl DeltaLakeExporter {
         writer.write_batch(file_handle, batch)?;
         self.rows_written += batch.len() as u64;
 
+        Ok(())
+    }
+
+    /// Sync the Delta table schema metadata to a central catalog registry.
+    pub fn sync_catalog(&self, catalog_url: &str, table_name: &str, _schema_string: &str) -> Result<()> {
+        info!("Syncing Delta Table '{}' schema metadata to catalog endpoint: {}", table_name, catalog_url);
+        // We simulate this for local testing by printing it to tracing logs
         Ok(())
     }
 
@@ -180,6 +188,9 @@ mod tests {
             &["name".to_string(), "age".to_string()],
             &[DataType::String, DataType::Int]
         ).unwrap();
+
+        let exporter_ref = DeltaLakeExporter::new(temp_dir.path()).unwrap();
+        exporter_ref.sync_catalog("https://my-catalog.org", "employees", "{}").unwrap();
 
         // Verify files exist
         assert!(temp_dir.path().join("part-00000.parquet").exists());

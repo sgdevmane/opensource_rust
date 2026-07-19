@@ -519,6 +519,86 @@ impl Row {
     }
 }
 
+/// Trait to map Rust structures directly to/from Row structures.
+pub trait RowMapper: Sized {
+    /// Deserializes a Row into the custom struct.
+    fn from_row(row: &Row) -> crate::error::Result<Self>;
+    /// Serializes the custom struct into a Row.
+    fn to_row(&self, index: u64) -> Row;
+}
+
+/// Helper trait to parse custom types from a CellValue.
+pub trait FromCellValue: Sized {
+    /// Extract the typed value from CellValue.
+    fn from_cell_value(val: &CellValue) -> crate::error::Result<Self>;
+}
+
+impl FromCellValue for String {
+    fn from_cell_value(val: &CellValue) -> crate::error::Result<Self> {
+        match val {
+            CellValue::String(s) => Ok(s.to_string()),
+            CellValue::Null => Ok(String::new()),
+            _ => Ok(val.to_display_string()),
+        }
+    }
+}
+
+impl FromCellValue for i64 {
+    fn from_cell_value(val: &CellValue) -> crate::error::Result<Self> {
+        val.as_int().ok_or_else(|| {
+            crate::error::DataForgeError::config(format!("Cannot convert CellValue to i64: {:?}", val))
+        })
+    }
+}
+
+impl FromCellValue for f64 {
+    fn from_cell_value(val: &CellValue) -> crate::error::Result<Self> {
+        val.as_float().ok_or_else(|| {
+            crate::error::DataForgeError::config(format!("Cannot convert CellValue to f64: {:?}", val))
+        })
+    }
+}
+
+impl FromCellValue for bool {
+    fn from_cell_value(val: &CellValue) -> crate::error::Result<Self> {
+        match val {
+            CellValue::Bool(b) => Ok(*b),
+            CellValue::Int(i) => Ok(*i != 0),
+            CellValue::String(s) => Ok(matches!(s.to_lowercase().as_str(), "true" | "yes" | "1")),
+            _ => Ok(false),
+        }
+    }
+}
+
+/// Helper macro to implement RowMapper for any user struct.
+#[macro_export]
+macro_rules! impl_row_mapper {
+    ($struct_name:ident, { $($field_idx:expr => $field_name:ident : $val_type:ty),* $(,)? }) => {
+        impl $crate::types::RowMapper for $struct_name {
+            fn from_row(row: &$crate::types::Row) -> $crate::error::Result<Self> {
+                Ok($struct_name {
+                    $(
+                        $field_name: {
+                            let cell = row.get($field_idx).ok_or_else(|| {
+                                $crate::error::DataForgeError::config(format!("Field not found at index {}", $field_idx))
+                            })?;
+                            <$val_type as $crate::types::FromCellValue>::from_cell_value(cell)?
+                        }
+                    ),*
+                })
+            }
+
+            fn to_row(&self, index: u64) -> $crate::types::Row {
+                let mut row = $crate::types::Row::new(index);
+                $(
+                    row.push($crate::types::CellValue::from(self.$field_name.clone()));
+                )*
+                row
+            }
+        }
+    };
+}
+
 // =============================================================================
 // RowBatch — construction and access methods
 // =============================================================================
@@ -799,7 +879,7 @@ mod tests {
     #[test]
     fn test_cell_value_from_conversions() {
         assert_eq!(CellValue::from(42_i64), CellValue::Int(42));
-        assert_eq!(CellValue::from(3.14_f64), CellValue::Float(3.14));
+        assert_eq!(CellValue::from(3.15_f64), CellValue::Float(3.15));
         assert_eq!(CellValue::from(true), CellValue::Bool(true));
         assert_eq!(
             CellValue::from("hello"),
@@ -812,8 +892,8 @@ mod tests {
         assert!(CellValue::Null.is_null());
         assert!(CellValue::Int(42).is_int());
         assert!(CellValue::Int(42).is_numeric());
-        assert!(CellValue::Float(3.14).is_float());
-        assert!(CellValue::Float(3.14).is_numeric());
+        assert!(CellValue::Float(3.15).is_float());
+        assert!(CellValue::Float(3.15).is_numeric());
         assert!(CellValue::from("text").is_string());
     }
 
@@ -821,7 +901,7 @@ mod tests {
     fn test_cell_value_extraction() {
         assert_eq!(CellValue::Int(42).as_int(), Some(42));
         assert_eq!(CellValue::Int(42).as_float(), Some(42.0));
-        assert_eq!(CellValue::Float(3.14).as_float(), Some(3.14));
+        assert_eq!(CellValue::Float(3.15).as_float(), Some(3.15));
         assert_eq!(CellValue::from("hello").as_str(), Some("hello"));
         assert_eq!(CellValue::Null.as_int(), None);
     }
@@ -912,5 +992,36 @@ mod tests {
         let compressed_dict = CompressedColumn::compress(&values_dict);
         assert!(matches!(compressed_dict, CompressedColumn::Dictionary { .. }));
         assert_eq!(compressed_dict.decompress(), values_dict);
+    }
+
+    #[test]
+    fn test_row_mapper() {
+        struct User {
+            name: String,
+            age: i64,
+            active: bool,
+        }
+
+        impl_row_mapper!(User, {
+            0 => name: String,
+            1 => age: i64,
+            2 => active: bool,
+        });
+
+        let mut row = Row::new(5);
+        row.push(CellValue::from("Bob"));
+        row.push(CellValue::from(25_i64));
+        row.push(CellValue::from(true));
+
+        let user = User::from_row(&row).unwrap();
+        assert_eq!(user.name, "Bob");
+        assert_eq!(user.age, 25);
+        assert!(user.active);
+
+        let serialized_row = user.to_row(10);
+        assert_eq!(serialized_row.index, 10);
+        assert_eq!(serialized_row.get_str(0), Some("Bob"));
+        assert_eq!(serialized_row.get_int(1), Some(25));
+        assert_eq!(serialized_row.get(2).and_then(|c| c.as_bool()), Some(true));
     }
 }

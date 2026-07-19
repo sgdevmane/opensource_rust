@@ -32,24 +32,24 @@ switch (platform) {
   case 'android':
     switch (arch) {
       case 'arm64':
-        localFileExisted = existsSync(join(__dirname, 'dataforge.android-arm64.node'))
+        localFileExisted = existsSync(join(__dirname, 'spreadsheet_parser.android-arm64.node'))
         try {
           if (localFileExisted) {
-            nativeBinding = require('./dataforge.android-arm64.node')
+            nativeBinding = require('./spreadsheet_parser.android-arm64.node')
           } else {
-            nativeBinding = require('dataforge-native-android-arm64')
+            nativeBinding = require('spreadsheet-parser-native-android-arm64')
           }
         } catch (e) {
           loadError = e
         }
         break
       case 'arm':
-        localFileExisted = existsSync(join(__dirname, 'dataforge.android-arm-eabi.node'))
+        localFileExisted = existsSync(join(__dirname, 'spreadsheet_parser.android-arm-eabi.node'))
         try {
           if (localFileExisted) {
-            nativeBinding = require('./dataforge.android-arm-eabi.node')
+            nativeBinding = require('./spreadsheet_parser.android-arm-eabi.node')
           } else {
-            nativeBinding = require('dataforge-native-android-arm-eabi')
+            nativeBinding = require('spreadsheet-parser-native-android-arm-eabi')
           }
         } catch (e) {
           loadError = e
@@ -63,13 +63,13 @@ switch (platform) {
     switch (arch) {
       case 'x64':
         localFileExisted = existsSync(
-          join(__dirname, 'dataforge.win32-x64-msvc.node')
+          join(__dirname, 'spreadsheet_parser.win32-x64-msvc.node')
         )
         try {
           if (localFileExisted) {
-            nativeBinding = require('./dataforge.win32-x64-msvc.node')
+            nativeBinding = require('./spreadsheet_parser.win32-x64-msvc.node')
           } else {
-            nativeBinding = require('dataforge-native-win32-x64-msvc')
+            nativeBinding = require('spreadsheet-parser-native-win32-x64-msvc')
           }
         } catch (e) {
           loadError = e
@@ -77,13 +77,13 @@ switch (platform) {
         break
       case 'ia32':
         localFileExisted = existsSync(
-          join(__dirname, 'dataforge.win32-ia32-msvc.node')
+          join(__dirname, 'spreadsheet_parser.win32-ia32-msvc.node')
         )
         try {
           if (localFileExisted) {
-            nativeBinding = require('./dataforge.win32-ia32-msvc.node')
+            nativeBinding = require('./spreadsheet_parser.win32-ia32-msvc.node')
           } else {
-            nativeBinding = require('dataforge-native-win32-ia32-msvc')
+            nativeBinding = require('spreadsheet-parser-native-win32-ia32-msvc')
           }
         } catch (e) {
           loadError = e
@@ -91,13 +91,13 @@ switch (platform) {
         break
       case 'arm64':
         localFileExisted = existsSync(
-          join(__dirname, 'dataforge.win32-arm64-msvc.node')
+          join(__dirname, 'spreadsheet_parser.win32-arm64-msvc.node')
         )
         try {
           if (localFileExisted) {
-            nativeBinding = require('./dataforge.win32-arm64-msvc.node')
+            nativeBinding = require('./spreadsheet_parser.win32-arm64-msvc.node')
           } else {
-            nativeBinding = require('dataforge-native-win32-arm64-msvc')
+            nativeBinding = require('spreadsheet-parser-native-win32-arm64-msvc')
           }
         } catch (e) {
           loadError = e
@@ -108,23 +108,23 @@ switch (platform) {
     }
     break
   case 'darwin':
-    localFileExisted = existsSync(join(__dirname, 'dataforge.darwin-universal.node'))
+    localFileExisted = existsSync(join(__dirname, 'spreadsheet_parser.darwin-universal.node'))
     try {
       if (localFileExisted) {
-        nativeBinding = require('./dataforge.darwin-universal.node')
+        nativeBinding = require('./spreadsheet_parser.darwin-universal.node')
       } else {
-        nativeBinding = require('dataforge-native-darwin-universal')
+        nativeBinding = require('spreadsheet-parser-native-darwin-universal')
       }
       break
     } catch {}
     switch (arch) {
       case 'x64':
-        localFileExisted = existsSync(join(__dirname, 'dataforge.darwin-x64.node'))
+        localFileExisted = existsSync(join(__dirname, 'spreadsheet_parser.darwin-x64.node'))
         try {
           if (localFileExisted) {
-            nativeBinding = require('./dataforge.darwin-x64.node')
+            nativeBinding = require('./spreadsheet_parser.darwin-x64.node')
           } else {
-            nativeBinding = require('dataforge-native-darwin-x64')
+            nativeBinding = require('spreadsheet-parser-native-darwin-x64')
           }
         } catch (e) {
           loadError = e
@@ -132,13 +132,13 @@ switch (platform) {
         break
       case 'arm64':
         localFileExisted = existsSync(
-          join(__dirname, 'dataforge.darwin-arm64.node')
+          join(__dirname, 'spreadsheet_parser.darwin-arm64.node')
         )
         try {
           if (localFileExisted) {
-            nativeBinding = require('./dataforge.darwin-arm64.node')
+            nativeBinding = require('./spreadsheet_parser.darwin-arm64.node')
           } else {
-            nativeBinding = require('dataforge-native-darwin-arm64')
+            nativeBinding = require('spreadsheet-parser-native-darwin-arm64')
           }
         } catch (e) {
           loadError = e
@@ -152,12 +152,12 @@ switch (platform) {
     if (arch !== 'x64') {
       throw new Error(`Unsupported architecture on FreeBSD: ${arch}`)
     }
-    localFileExisted = existsSync(join(__dirname, 'dataforge.freebsd-x64.node'))
+    localFileExisted = existsSync(join(__dirname, 'spreadsheet_parser.freebsd-x64.node'))
     try {
       if (localFileExisted) {
-        nativeBinding = require('./dataforge.freebsd-x64.node')
+        nativeBinding = require('./spreadsheet_parser.freebsd-x64.node')
       } else {
-        nativeBinding = require('dataforge-native-freebsd-x64')
+        nativeBinding = require('spreadsheet-parser-native-freebsd-x64')
       }
     } catch (e) {
       loadError = e
@@ -168,26 +168,26 @@ switch (platform) {
       case 'x64':
         if (isMusl()) {
           localFileExisted = existsSync(
-            join(__dirname, 'dataforge.linux-x64-musl.node')
+            join(__dirname, 'spreadsheet_parser.linux-x64-musl.node')
           )
           try {
             if (localFileExisted) {
-              nativeBinding = require('./dataforge.linux-x64-musl.node')
+              nativeBinding = require('./spreadsheet_parser.linux-x64-musl.node')
             } else {
-              nativeBinding = require('dataforge-native-linux-x64-musl')
+              nativeBinding = require('spreadsheet-parser-native-linux-x64-musl')
             }
           } catch (e) {
             loadError = e
           }
         } else {
           localFileExisted = existsSync(
-            join(__dirname, 'dataforge.linux-x64-gnu.node')
+            join(__dirname, 'spreadsheet_parser.linux-x64-gnu.node')
           )
           try {
             if (localFileExisted) {
-              nativeBinding = require('./dataforge.linux-x64-gnu.node')
+              nativeBinding = require('./spreadsheet_parser.linux-x64-gnu.node')
             } else {
-              nativeBinding = require('dataforge-native-linux-x64-gnu')
+              nativeBinding = require('spreadsheet-parser-native-linux-x64-gnu')
             }
           } catch (e) {
             loadError = e
@@ -197,26 +197,26 @@ switch (platform) {
       case 'arm64':
         if (isMusl()) {
           localFileExisted = existsSync(
-            join(__dirname, 'dataforge.linux-arm64-musl.node')
+            join(__dirname, 'spreadsheet_parser.linux-arm64-musl.node')
           )
           try {
             if (localFileExisted) {
-              nativeBinding = require('./dataforge.linux-arm64-musl.node')
+              nativeBinding = require('./spreadsheet_parser.linux-arm64-musl.node')
             } else {
-              nativeBinding = require('dataforge-native-linux-arm64-musl')
+              nativeBinding = require('spreadsheet-parser-native-linux-arm64-musl')
             }
           } catch (e) {
             loadError = e
           }
         } else {
           localFileExisted = existsSync(
-            join(__dirname, 'dataforge.linux-arm64-gnu.node')
+            join(__dirname, 'spreadsheet_parser.linux-arm64-gnu.node')
           )
           try {
             if (localFileExisted) {
-              nativeBinding = require('./dataforge.linux-arm64-gnu.node')
+              nativeBinding = require('./spreadsheet_parser.linux-arm64-gnu.node')
             } else {
-              nativeBinding = require('dataforge-native-linux-arm64-gnu')
+              nativeBinding = require('spreadsheet-parser-native-linux-arm64-gnu')
             }
           } catch (e) {
             loadError = e
@@ -226,26 +226,26 @@ switch (platform) {
       case 'arm':
         if (isMusl()) {
           localFileExisted = existsSync(
-            join(__dirname, 'dataforge.linux-arm-musleabihf.node')
+            join(__dirname, 'spreadsheet_parser.linux-arm-musleabihf.node')
           )
           try {
             if (localFileExisted) {
-              nativeBinding = require('./dataforge.linux-arm-musleabihf.node')
+              nativeBinding = require('./spreadsheet_parser.linux-arm-musleabihf.node')
             } else {
-              nativeBinding = require('dataforge-native-linux-arm-musleabihf')
+              nativeBinding = require('spreadsheet-parser-native-linux-arm-musleabihf')
             }
           } catch (e) {
             loadError = e
           }
         } else {
           localFileExisted = existsSync(
-            join(__dirname, 'dataforge.linux-arm-gnueabihf.node')
+            join(__dirname, 'spreadsheet_parser.linux-arm-gnueabihf.node')
           )
           try {
             if (localFileExisted) {
-              nativeBinding = require('./dataforge.linux-arm-gnueabihf.node')
+              nativeBinding = require('./spreadsheet_parser.linux-arm-gnueabihf.node')
             } else {
-              nativeBinding = require('dataforge-native-linux-arm-gnueabihf')
+              nativeBinding = require('spreadsheet-parser-native-linux-arm-gnueabihf')
             }
           } catch (e) {
             loadError = e
@@ -255,26 +255,26 @@ switch (platform) {
       case 'riscv64':
         if (isMusl()) {
           localFileExisted = existsSync(
-            join(__dirname, 'dataforge.linux-riscv64-musl.node')
+            join(__dirname, 'spreadsheet_parser.linux-riscv64-musl.node')
           )
           try {
             if (localFileExisted) {
-              nativeBinding = require('./dataforge.linux-riscv64-musl.node')
+              nativeBinding = require('./spreadsheet_parser.linux-riscv64-musl.node')
             } else {
-              nativeBinding = require('dataforge-native-linux-riscv64-musl')
+              nativeBinding = require('spreadsheet-parser-native-linux-riscv64-musl')
             }
           } catch (e) {
             loadError = e
           }
         } else {
           localFileExisted = existsSync(
-            join(__dirname, 'dataforge.linux-riscv64-gnu.node')
+            join(__dirname, 'spreadsheet_parser.linux-riscv64-gnu.node')
           )
           try {
             if (localFileExisted) {
-              nativeBinding = require('./dataforge.linux-riscv64-gnu.node')
+              nativeBinding = require('./spreadsheet_parser.linux-riscv64-gnu.node')
             } else {
-              nativeBinding = require('dataforge-native-linux-riscv64-gnu')
+              nativeBinding = require('spreadsheet-parser-native-linux-riscv64-gnu')
             }
           } catch (e) {
             loadError = e
@@ -283,13 +283,13 @@ switch (platform) {
         break
       case 's390x':
         localFileExisted = existsSync(
-          join(__dirname, 'dataforge.linux-s390x-gnu.node')
+          join(__dirname, 'spreadsheet_parser.linux-s390x-gnu.node')
         )
         try {
           if (localFileExisted) {
-            nativeBinding = require('./dataforge.linux-s390x-gnu.node')
+            nativeBinding = require('./spreadsheet_parser.linux-s390x-gnu.node')
           } else {
-            nativeBinding = require('dataforge-native-linux-s390x-gnu')
+            nativeBinding = require('spreadsheet-parser-native-linux-s390x-gnu')
           }
         } catch (e) {
           loadError = e

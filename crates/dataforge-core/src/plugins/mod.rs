@@ -5,5 +5,7 @@
 // =============================================================================
 
 pub mod wasm;
+pub mod js;
 
 pub use wasm::WasmPlugin;
+pub use js::JsEngine;

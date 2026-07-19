@@ -102,6 +102,46 @@ impl MemoryTracker {
         })
     }
 
+    /// Generate an ASCII progress bar and stats showing current and peak memory usage.
+    pub fn generate_telemetry_ascii_chart(&self) -> String {
+        let current = self.current_bytes.load(Ordering::Relaxed);
+        let peak = self.peak_bytes.load(Ordering::Relaxed);
+        let limit = self.limit_bytes;
+
+        let pct = if limit > 0 {
+            (current as f64 / limit as f64 * 100.0).min(100.0)
+        } else {
+            0.0
+        };
+
+        let width = 30;
+        let filled = ((pct / 100.0) * width as f64) as usize;
+        let empty = width - filled;
+
+        let bar = format!(
+            "[{}{}] {:.1}%",
+            "#".repeat(filled),
+            ".".repeat(empty),
+            pct
+        );
+
+        format!(
+            "--- Memory Telemetry ---\n\
+             Usage Limit:  {} bytes\n\
+             Current Usg:  {} bytes {}\n\
+             Peak Usage:   {} bytes\n\
+             Allocated:    {} bytes\n\
+             Released:     {} bytes\n\
+             ------------------------",
+            limit,
+            current,
+            bar,
+            peak,
+            self.total_allocated.load(Ordering::Relaxed),
+            self.total_released.load(Ordering::Relaxed)
+        )
+    }
+
     /// Try to allocate `bytes` of memory, applying backpressure if needed.
     ///
     /// Returns a `MemoryGuard` that automatically releases the memory
@@ -521,5 +561,14 @@ mod tests {
         let _g = tracker.try_allocate(500).unwrap();
         let pct = tracker.utilization_percent();
         assert!((pct - 50.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_telemetry_ascii_chart() {
+        let tracker = MemoryTracker::new(1000, BackpressurePolicy::Error);
+        let _g = tracker.try_allocate(500).unwrap();
+        let chart = tracker.generate_telemetry_ascii_chart();
+        assert!(chart.contains("Memory Telemetry"));
+        assert!(chart.contains("50.0%"));
     }
 }

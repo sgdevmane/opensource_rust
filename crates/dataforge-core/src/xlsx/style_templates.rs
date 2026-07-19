@@ -98,6 +98,62 @@ impl Default for CustomStyle {
     }
 }
 
+/// Builder helper for CustomStyle creation.
+#[derive(Debug, Clone)]
+pub struct CustomStyleBuilder {
+    style: CustomStyle,
+}
+
+impl CustomStyleBuilder {
+    /// Create a new CustomStyleBuilder.
+    pub fn new() -> Self {
+        CustomStyleBuilder {
+            style: CustomStyle::default(),
+        }
+    }
+
+    /// Set header background color.
+    pub fn header_bg_color(mut self, color: &str) -> Self {
+        self.style.header_bg_color = color.to_string();
+        self
+    }
+
+    /// Set header font color.
+    pub fn header_font_color(mut self, color: &str) -> Self {
+        self.style.header_font_color = color.to_string();
+        self
+    }
+
+    /// Set whether header font is bold.
+    pub fn header_bold(mut self, bold: bool) -> Self {
+        self.style.header_bold = bold;
+        self
+    }
+
+    /// Set alternating row background color.
+    pub fn alt_row_bg_color(mut self, color: &str) -> Self {
+        self.style.alt_row_bg_color = color.to_string();
+        self
+    }
+
+    /// Set font family.
+    pub fn font_family(mut self, font: &str) -> Self {
+        self.style.font_family = font.to_string();
+        self
+    }
+
+    /// Set font size.
+    pub fn font_size(mut self, size: u8) -> Self {
+        self.style.font_size = size;
+        self
+    }
+
+    /// Build the CustomStyle instance.
+    pub fn build(self) -> CustomStyle {
+        self.style
+    }
+}
+
 impl StyleTemplate {
     /// Resolve this template into a concrete `CustomStyle`.
     ///

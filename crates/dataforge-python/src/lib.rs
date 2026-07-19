@@ -134,6 +134,14 @@ impl PyRowBatch {
             Ok(dict.into())
         })
     }
+
+    /// Convert the batch directly to a Polars DataFrame.
+    pub fn to_polars(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let col_dict = self.to_column_dict()?;
+        let pl = py.import_bound("polars")?;
+        let df = pl.call_method1("DataFrame", (col_dict,))?;
+        Ok(df.into())
+    }
 }
 
 /// Streaming CSV reader for Python.

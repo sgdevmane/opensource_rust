@@ -1,11 +1,11 @@
 {
-  "name": "dataforge-native",
+  "name": "spreadsheet-parser-native",
   "version": "0.1.0",
   "description": "High-performance Excel and CSV streaming engine for Node.js written in Rust",
   "main": "index.js",
   "types": "index.d.ts",
   "napi": {
-    "name": "dataforge",
+    "name": "spreadsheet_parser",
     "triple": {
       "defaults": true
     }
@@ -21,8 +21,8 @@
   },
   "license": "MIT OR Apache-2.0",
   "optionalDependencies": {
-    "dataforge-native-win32-x64-msvc": "0.1.0",
-    "dataforge-native-darwin-x64": "0.1.0",
-    "dataforge-native-linux-x64-gnu": "0.1.0"
+    "spreadsheet-parser-native-win32-x64-msvc": "0.1.0",
+    "spreadsheet-parser-native-darwin-x64": "0.1.0",
+    "spreadsheet-parser-native-linux-x64-gnu": "0.1.0"
   }
 }

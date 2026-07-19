@@ -89,6 +89,12 @@ pub mod formula;
 /// Custom WASM plugin engine
 pub mod plugins;
 
+/// Kafka streaming add-on module
+pub mod kafka;
+
+/// Direct Cloud Storage (S3/GCS) module
+pub mod cloud;
+
 /// Streaming JSON/JSONL reader.
 pub mod json;
 
@@ -97,6 +103,9 @@ pub mod arrow;
 
 /// Core data types: CellValue, Row, RowBatch, ColumnSchema, DataType.
 pub mod types;
+
+/// ZIP archive auto-correction utility.
+pub mod zip_repair;
 
 /// Streaming XLSX (Excel 2007+) reader and writer.
 pub mod xlsx;
@@ -114,9 +123,16 @@ pub mod delta;
 pub use config::{FileFormat, ReaderConfig, WriterConfig};
 pub use error::{DataForgeError, Result};
 pub use formula::{FormulaEvaluator, SqlEngine};
-pub use plugins::WasmPlugin;
+pub use plugins::{WasmPlugin, JsEngine};
+pub use kafka::{KafkaProducer, KafkaConsumer};
+pub use cloud::CloudStorageClient;
 pub use json::JsonReader;
 pub use arrow::ArrowIpcWriter;
 pub use parquet::{ParquetReader, ParquetWriter};
 pub use delta::DeltaLakeExporter;
+pub use convert::SqlConnector;
+pub use xlsx::{ParallelMultiSheetReader, StyleTemplate, CustomStyle, CustomStyleBuilder};
+pub use zip_repair::auto_correct_zip;
+pub use transform::{encrypt_columns, disk_buffered_fuzzy_join, PivotTable, PivotAggregate};
+pub use schema::{SchemaDriftHandler, SchemaDriftConfig};
 pub use types::{CellValue, ColumnSchema, DataType, Row, RowBatch, SheetMetadata};

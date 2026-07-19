@@ -37,9 +37,8 @@ impl CsvSniffer {
         let lines: Vec<&str> = content.lines().take(10).collect();
 
         for &delim in &candidates {
-            let delim_char = delim as char;
             let counts: Vec<usize> = lines.iter()
-                .map(|line| line.chars().filter(|&c| c == delim_char).count())
+                .map(|line| simd_count_occ(line.as_bytes(), delim))
                 .collect();
 
             if counts.is_empty() || counts.iter().all(|&c| c == 0) {
@@ -121,6 +120,30 @@ fn detect_header(lines: &[&str], delimiter: u8) -> bool {
         all_strings && lines.len() > 1
     }
 }
+
+#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+fn simd_count_occ(data: &[u8], delim: u8) -> usize {
+    use std::arch::wasm32::*;
+    let mut count = 0;
+    let delim_vec = unsafe { u8x16_splat(delim) };
+    let chunks = data.chunks_exact(16);
+    let rem = chunks.remainder();
+    for chunk in chunks {
+        unsafe {
+            let chunk_vec = v128_load(chunk.as_ptr() as *const v128);
+            let eq = u8x16_eq(chunk_vec, delim_vec);
+            let bitmask = u8x16_bitmask(eq);
+            count += bitmask.count_ones() as usize;
+        }
+    }
+    count + rem.iter().filter(|&&b| b == delim).count()
+}
+
+#[cfg(not(all(target_arch = "wasm32", target_feature = "simd128")))]
+fn simd_count_occ(data: &[u8], delim: u8) -> usize {
+    data.iter().filter(|&&b| b == delim).count()
+}
+
 
 #[cfg(test)]
 mod tests {

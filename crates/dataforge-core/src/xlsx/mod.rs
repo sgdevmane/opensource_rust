@@ -25,9 +25,11 @@ pub mod writer;
 pub mod decrypt;
 pub mod encrypt;
 pub mod style_templates;
+pub mod parallel_reader;
 
 pub use reader::XlsxReader;
 pub use writer::XlsxWriter;
 pub use decrypt::XlsxDecrypter;
 pub use encrypt::encrypt_xlsx;
-pub use style_templates::StyleTemplate;
+pub use style_templates::{StyleTemplate, CustomStyle, CustomStyleBuilder};
+pub use parallel_reader::ParallelMultiSheetReader;

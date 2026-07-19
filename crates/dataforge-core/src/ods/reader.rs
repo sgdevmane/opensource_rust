@@ -535,8 +535,8 @@ mod tests {
         let val = resolve_ods_cell("42", Some("float"), Some("42"));
         assert_eq!(val.as_int(), Some(42));
 
-        let val = resolve_ods_cell("3.14", Some("float"), Some("3.14"));
-        assert_eq!(val.as_float(), Some(3.14));
+        let val = resolve_ods_cell("3.15", Some("float"), Some("3.15"));
+        assert_eq!(val.as_float(), Some(3.15));
     }
 
     #[test]

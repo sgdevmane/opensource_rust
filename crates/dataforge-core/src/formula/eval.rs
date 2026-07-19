@@ -11,10 +11,22 @@ use crate::error::{DataForgeError, Result};
 /// Lightweight spreadsheet formula evaluator.
 pub struct FormulaEvaluator;
 
+/// Helper to normalize ODS-style formulas into standard Excel formulas.
+pub fn normalize_ods_formula(formula: &str) -> String {
+    let mut formula = formula.trim().to_string();
+    if formula.starts_with("oooc:=") {
+        formula = formula.replacen("oooc:=", "=", 1);
+    }
+    // Remove OpenDocument cell reference delimiters, e.g. [.A1] -> A1
+    formula = formula.replace("[.", "").replace("]", "");
+    formula
+}
+
 impl FormulaEvaluator {
     /// Evaluate a row-relative formula (e.g. "=A1+B1" or "=A+B*C") against a single row.
     pub fn eval_row(formula: &str, row: &Row) -> Result<CellValue> {
-        let formula = formula.trim();
+        let normalized = normalize_ods_formula(formula);
+        let formula = normalized.trim();
         if !formula.starts_with('=') {
             return Err(DataForgeError::config("Formula must start with '='"));
         }
@@ -24,7 +36,8 @@ impl FormulaEvaluator {
 
     /// Evaluate an aggregate function (e.g. "=SUM(A)", "=AVERAGE(B)") over a slice of rows.
     pub fn eval_batch(formula: &str, rows: &[Row]) -> Result<CellValue> {
-        let formula = formula.trim();
+        let normalized = normalize_ods_formula(formula);
+        let formula = normalized.trim();
         if !formula.starts_with('=') {
             return Err(DataForgeError::config("Formula must start with '='"));
         }
@@ -271,5 +284,16 @@ mod tests {
 
         let max = FormulaEvaluator::eval_batch("=MAX(A)", &rows).unwrap();
         assert_eq!(max.as_float(), Some(30.0));
+    }
+
+    #[test]
+    fn test_ods_formula_normalization() {
+        let mut row = Row::new(0);
+        row.push(CellValue::from(10.0)); // A
+        row.push(CellValue::from(5.0));  // B
+
+        // ODS style formula: oooc:=A1+B1
+        let res = FormulaEvaluator::eval_row("oooc:=[.A1]+[.B1]", &row).unwrap();
+        assert_eq!(res.as_float(), Some(15.0));
     }
 }

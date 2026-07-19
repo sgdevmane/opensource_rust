@@ -1031,7 +1031,7 @@ mod tests {
         assert_eq!(parse_cell_value("  ", &None), CellValue::Null);
         assert_eq!(parse_cell_value("42", &None), CellValue::Int(42));
         assert_eq!(parse_cell_value("-7", &None), CellValue::Int(-7));
-        assert_eq!(parse_cell_value("3.14", &None), CellValue::Float(3.14));
+        assert_eq!(parse_cell_value("3.15", &None), CellValue::Float(3.15));
         assert_eq!(parse_cell_value("true", &None), CellValue::Bool(true));
         assert_eq!(parse_cell_value("FALSE", &None), CellValue::Bool(false));
         assert!(matches!(parse_cell_value("hello", &None), CellValue::String(_)));

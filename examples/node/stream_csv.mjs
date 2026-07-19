@@ -29,7 +29,7 @@ console.log('Headers:', reader.headers);
 let batch;
 let batchCount = 0;
 
-while ((batch = reader.next_batch()) !== null) {
+while ((batch = reader.nextBatch()) !== null) {
   batchCount++;
   console.log(`\n--- Batch ${batchCount} (${batch.rowCount} rows) ---`);
   

@@ -24,6 +24,7 @@ pub struct PivotTable {
     agg: PivotAggregate,
     // Maps row_key -> (column_key -> accumulated_value)
     data: BTreeMap<String, BTreeMap<String, f64>>,
+    filter_pred: Option<Box<dyn Fn(&Row) -> bool + Send + Sync>>,
 }
 
 impl PivotTable {
@@ -40,12 +41,27 @@ impl PivotTable {
             val_idx,
             agg,
             data: BTreeMap::new(),
+            filter_pred: None,
         }
+    }
+
+    /// Add a value filter predicate.
+    pub fn with_filter<F>(mut self, filter: F) -> Self
+    where
+        F: Fn(&Row) -> bool + Send + Sync + 'static,
+    {
+        self.filter_pred = Some(Box::new(filter));
+        self
     }
 
     /// Add a RowBatch to accumulate values in the pivot.
     pub fn add_batch(&mut self, batch: &RowBatch) {
         for row in &batch.rows {
+            if let Some(ref filter) = self.filter_pred {
+                if !filter(row) {
+                    continue;
+                }
+            }
             let row_key = match row.get(self.row_key_idx) {
                 Some(cell) if !cell.is_null() => cell.to_display_string(),
                 _ => continue,
@@ -151,5 +167,34 @@ mod tests {
         assert_eq!(result.rows[1].get_str(0), Some("2022"));
         assert_eq!(result.rows[1].get_float(1), Some(200.0));
         assert!(result.rows[1].get(2).unwrap().is_null());
+    }
+
+    #[test]
+    fn test_pivot_table_filtered() {
+        // Only aggregate sales >= 150
+        let mut pivot = PivotTable::new(0, 1, 2, PivotAggregate::Sum)
+            .with_filter(|row| row.get_int(2).unwrap_or(0) >= 150);
+
+        let mut batch = RowBatch::new(0);
+        batch.headers = Some(vec!["Year".to_string(), "Product".to_string(), "Sales".to_string()]);
+        
+        let mut r1 = Row::new(0);
+        r1.push(CellValue::from("2021"));
+        r1.push(CellValue::from("Apple"));
+        r1.push(CellValue::from(100_i64)); // Should be filtered out!
+        batch.push(r1);
+
+        let mut r2 = Row::new(1);
+        r2.push(CellValue::from("2021"));
+        r2.push(CellValue::from("Orange"));
+        r2.push(CellValue::from(150_i64)); // Should be kept
+        batch.push(r2);
+
+        pivot.add_batch(&batch);
+        let result = pivot.finish("Year");
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.headers.as_ref().unwrap(), &["Year", "Orange"]);
+        assert_eq!(result.rows[0].get_float(1), Some(150.0));
     }
 }

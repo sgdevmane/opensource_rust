@@ -123,3 +123,6 @@ path = "../../examples/rust/basic_xlsx_read.rs"
 [[example]]
 name = "advanced_features"
 path = "../../examples/rust/advanced_features.rs"
+
+[features]
+simd = []

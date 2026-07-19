@@ -5,6 +5,7 @@
 // =============================================================================
 
 use crate::types::{CellValue, Row, RowBatch};
+use crate::error::Result;
 
 /// Fuzzy Similarity Metric to use for key matches.
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
@@ -171,4 +172,69 @@ mod tests {
         assert_eq!(joined.len(), 1);
         assert_eq!(joined.rows[0].get_str(2), Some("R&D"));
     }
+
+    #[test]
+    fn test_disk_buffered_fuzzy_join() {
+        use std::io::Write;
+        let left_csv = "employee,dept_label\nBob,Engineering\n";
+        let right_csv = "name_ref,department\nEngineering Dept,R&D\n";
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let left_path = temp_dir.path().join("left.csv");
+        let right_path = temp_dir.path().join("right.csv");
+
+        std::fs::File::create(&left_path).unwrap().write_all(left_csv.as_bytes()).unwrap();
+        std::fs::File::create(&right_path).unwrap().write_all(right_csv.as_bytes()).unwrap();
+
+        let results = disk_buffered_fuzzy_join(
+            &left_path,
+            &right_path,
+            1,
+            0,
+            FuzzyJoinMetric::Levenshtein,
+            0.6,
+        ).unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].rows[0].get_str(2), Some("R&D"));
+    }
+}
+
+/// Perform a disk-buffered fuzzy join between two CSV files.
+pub fn disk_buffered_fuzzy_join(
+    left_file: &std::path::Path,
+    right_file: &std::path::Path,
+    left_key_idx: usize,
+    right_key_idx: usize,
+    metric: FuzzyJoinMetric,
+    threshold: f64,
+) -> Result<Vec<RowBatch>> {
+    use crate::csv::CsvReader;
+    use crate::config::ReaderConfig;
+
+    let mut right_reader = CsvReader::open(right_file, ReaderConfig::default())?;
+    let mut right_batches = Vec::new();
+    while let Some(batch_res) = right_reader.next_batch() {
+        right_batches.push(batch_res?);
+    }
+    
+    let mut combined_right = RowBatch::new(0);
+    if !right_batches.is_empty() {
+        combined_right.headers = right_batches[0].headers.clone();
+        for b in right_batches {
+            combined_right.rows.extend(b.rows);
+        }
+    }
+
+    let joiner = FuzzyJoiner::new(combined_right, left_key_idx, right_key_idx, metric, threshold);
+
+    let mut left_reader = CsvReader::open(left_file, ReaderConfig::default())?;
+    let mut output_batches = Vec::new();
+    while let Some(batch_res) = left_reader.next_batch() {
+        let batch = batch_res?;
+        let joined_batch = joiner.join_batch(&batch);
+        output_batches.push(joined_batch);
+    }
+
+    Ok(output_batches)
 }

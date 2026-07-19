@@ -260,6 +260,27 @@ impl XlsxReader {
         parse_workbook_sheets(&mut archive)
     }
 
+    /// Fast scanner for sheet metadata without parsing all cell/row values.
+    pub fn scan_metadata(path: impl AsRef<Path>) -> Result<Vec<crate::types::SheetMetadata>> {
+        let file = File::open(path.as_ref())?;
+        let mut archive = ZipArchive::new(BufReader::new(file))?;
+        let sheet_names = parse_workbook_sheets(&mut archive)?;
+
+        let mut metadata_list = Vec::new();
+        for (idx, name) in sheet_names.iter().enumerate() {
+            metadata_list.push(crate::types::SheetMetadata {
+                name: name.clone(),
+                index: idx,
+                row_count: None,
+                column_count: 0,
+                columns: Vec::new(),
+                is_active: idx == 0,
+            });
+        }
+
+        Ok(metadata_list)
+    }
+
     /// Read the next batch of rows from the worksheet.
     ///
     /// Returns `None` when the worksheet has been fully consumed.
@@ -854,8 +875,8 @@ mod tests {
         let val = resolve_cell_value("42", None, None, &sst, &styles, DateSystem::Base1900);
         assert_eq!(val.as_int(), Some(42));
 
-        let val = resolve_cell_value("3.14", None, None, &sst, &styles, DateSystem::Base1900);
-        assert_eq!(val.as_float(), Some(3.14));
+        let val = resolve_cell_value("3.15", None, None, &sst, &styles, DateSystem::Base1900);
+        assert_eq!(val.as_float(), Some(3.15));
     }
 
     #[test]

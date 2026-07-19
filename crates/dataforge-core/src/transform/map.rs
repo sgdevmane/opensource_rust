@@ -38,6 +38,11 @@ pub fn select_columns(batch: &mut RowBatch, indices: &[usize]) {
     }
 }
 
+/// Reorder columns in a batch to match a new index sequence.
+pub fn reorder_columns(batch: &mut RowBatch, new_order: &[usize]) {
+    select_columns(batch, new_order);
+}
+
 /// Rename columns in a batch by applying a name mapping.
 ///
 /// # Arguments
@@ -118,6 +123,38 @@ pub fn coerce_column(batch: &mut RowBatch, column: usize, target: &crate::types:
                     }
                     _ => CellValue::Null,
                 },
+                DataType::Date => match cell {
+                    CellValue::Date(d) => CellValue::Date(*d),
+                    CellValue::DateTime(dt) => CellValue::Date(dt.date()),
+                    CellValue::String(s) => {
+                        if let Ok(d) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+                            CellValue::Date(d)
+                        } else if let Ok(d) = chrono::NaiveDate::parse_from_str(s, "%Y/%m/%d") {
+                            CellValue::Date(d)
+                        } else if let Ok(d) = chrono::NaiveDate::parse_from_str(s, "%d-%m-%Y") {
+                            CellValue::Date(d)
+                        } else if let Ok(d) = chrono::NaiveDate::parse_from_str(s, "%d/%m/%Y") {
+                            CellValue::Date(d)
+                        } else {
+                            CellValue::Null
+                        }
+                    }
+                    _ => CellValue::Null,
+                },
+                DataType::DateTime => match cell {
+                    CellValue::DateTime(dt) => CellValue::DateTime(*dt),
+                    CellValue::Date(d) => CellValue::DateTime(d.and_hms_opt(0, 0, 0).unwrap_or_default()),
+                    CellValue::String(s) => {
+                        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
+                            CellValue::DateTime(dt.naive_utc())
+                        } else if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
+                            CellValue::DateTime(dt)
+                        } else {
+                            CellValue::Null
+                        }
+                    }
+                    _ => CellValue::Null,
+                },
                 _ => cell.clone(),
             };
         }
@@ -192,5 +229,19 @@ mod tests {
         coerce_column(&mut batch, 1, &crate::types::DataType::String);
 
         assert_eq!(batch.rows[0].get_str(1), Some("30"));
+    }
+
+    #[test]
+    fn test_coerce_column_to_date() {
+        let mut batch = RowBatch::new(0);
+        batch.headers = Some(vec!["date_str".into()]);
+        let mut r1 = Row::new(0);
+        r1.push(CellValue::from("2026-07-18"));
+        batch.push(r1);
+
+        coerce_column(&mut batch, 0, &crate::types::DataType::Date);
+        let val = batch.rows[0].get(0).unwrap();
+        assert!(val.as_date().is_some());
+        assert_eq!(val.to_display_string(), "2026-07-18");
     }
 }
