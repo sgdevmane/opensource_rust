@@ -116,6 +116,9 @@ pub mod parquet;
 /// Delta Lake exporter.
 pub mod delta;
 
+/// Prometheus & Telemetry metrics engine.
+pub mod metrics;
+
 // =============================================================================
 // Re-exports for convenient access
 // =============================================================================
@@ -130,9 +133,10 @@ pub use json::JsonReader;
 pub use arrow::{ArrowIpcWriter, ArrowIpcStreamWriter};
 pub use parquet::{ParquetReader, ParquetWriter, ParquetColumnMetadata, scan_parquet_metadata};
 pub use delta::DeltaLakeExporter;
-pub use convert::{SqlConnector, PostgresCopyWriter};
+pub use convert::{SqlConnector, PostgresCopyWriter, PdfReportGenerator};
 pub use xlsx::{ParallelMultiSheetReader, StyleTemplate, CustomStyle, CustomStyleBuilder};
 pub use zip_repair::auto_correct_zip;
-pub use transform::{encrypt_columns, disk_buffered_fuzzy_join, PivotTable, PivotAggregate};
+pub use transform::{encrypt_columns, disk_buffered_fuzzy_join, PivotTable, PivotAggregate, DataCleaner, CleanStrategy, WorkbookDiffEngine, DiffReport};
 pub use schema::{SchemaDriftHandler, SchemaDriftConfig};
 pub use types::{CellValue, ColumnSchema, DataType, Row, RowBatch, SheetMetadata};
+pub use metrics::CoreMetricsRegistry;

@@ -21,6 +21,7 @@ members = [
     "crates/dataforge-node",
     "crates/dataforge-python",
     "crates/dataforge-wasm",
+    "crates/dataforge-server",
 ]
 
 # ---------------------------------------------------------------------------

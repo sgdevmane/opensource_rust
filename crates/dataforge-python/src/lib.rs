@@ -142,7 +142,12 @@ impl PyRowBatch {
         let df = pl.call_method1("DataFrame", (col_dict,))?;
         Ok(df.into())
     }
-}
+
+    /// Render batch to a styled HTML report for PDF printing.
+    pub fn to_html_report(&self, title: String, dark_mode: bool) -> String {
+        let generator = dataforge_core::PdfReportGenerator::new(title).with_dark_mode(dark_mode);
+        generator.render_html(&self.inner).unwrap_or_else(|e| format!("Error generating report: {e}"))
+    }
 
 /// Streaming CSV reader for Python.
 #[pyclass]

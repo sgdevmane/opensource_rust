@@ -1,0 +1,103 @@
+{
+	"info": {
+		"_postman_id": "dataforge-api-collection",
+		"name": "DataForge REST API Engine",
+		"description": "Postman API Collection for DataForge Spreadsheet Parsing and Transformation Engine",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "System Health",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/health",
+					"host": ["{{base_url}}"],
+					"path": ["health"]
+				}
+			}
+		},
+		{
+			"name": "Prometheus Metrics",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/metrics",
+					"host": ["{{base_url}}"],
+					"path": ["metrics"]
+				}
+			}
+		},
+		{
+			"name": "Evaluate Formula",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"formula\": \"SUM(10, 20, 30)\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/v1/evaluate",
+					"host": ["{{base_url}}"],
+					"path": ["api", "v1", "evaluate"]
+				}
+			}
+		},
+		{
+			"name": "Data Cleaning & Masking",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"sample_text\": \"john.doe@example.com\",\n  \"strategy\": \"mask_email\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/v1/clean",
+					"host": ["{{base_url}}"],
+					"path": ["api", "v1", "clean"]
+				}
+			}
+		},
+		{
+			"name": "Generate PDF/HTML Report",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"title\": \"Monthly Executive Summary\",\n  \"dark_mode\": true\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/v1/report/pdf",
+					"host": ["{{base_url}}"],
+					"path": ["api", "v1", "report", "pdf"]
+				}
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080"
+		}
+	]
+}

@@ -74,7 +74,36 @@ impl WasmRowBatch {
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok(buffer.into_inner())
     }
-}
+
+    /// Generate AG Grid / TanStack Table compatible grid column definitions and row data.
+    #[wasm_bindgen]
+    pub fn to_grid_format(&self) -> JsValue {
+        let mut col_defs = Vec::new();
+        if let Some(ref headers) = self.inner.headers {
+            for h in headers {
+                let mut def = serde_json::Map::new();
+                def.insert("headerName".into(), serde_json::Value::String(h.to_string()));
+                def.insert("field".into(), serde_json::Value::String(h.to_string()));
+                def.insert("sortable".into(), serde_json::Value::Bool(true));
+                def.insert("filter".into(), serde_json::Value::Bool(true));
+                col_defs.push(serde_json::Value::Object(def));
+            }
+        }
+
+        let row_data = self.to_json_objects();
+        let mut root = serde_json::Map::new();
+        root.insert("columnDefs".into(), serde_json::Value::Array(col_defs));
+        root.insert("rowData".into(), row_data.into_serde().unwrap_or(serde_json::Value::Null));
+
+        serde_wasm_bindgen::to_value(&root).unwrap_or(JsValue::NULL)
+    }
+
+    /// Render batch to a styled HTML report.
+    #[wasm_bindgen]
+    pub fn to_html_report(&self, title: &str, dark_mode: bool) -> String {
+        let generator = dataforge_core::PdfReportGenerator::new(title).with_dark_mode(dark_mode);
+        generator.render_html(&self.inner).unwrap_or_else(|e| format!("Error generating report: {e}"))
+    }
 
 /// CSV Streaming Reader for WASM.
 #[wasm_bindgen]

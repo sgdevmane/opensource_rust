@@ -20,6 +20,7 @@ export declare class JsRowBatch {
   get headers(): Array<string> | null
   getRow(index: number): Array<JsCell> | null
   toJsonObjects(): Array<any>
+  toHtmlReport(title: string, darkMode: boolean): string
 }
 /** JS Class for CSV Streaming Reading. */
 export declare class JsCsvReader {

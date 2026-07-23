@@ -1,0 +1,54 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "title": "DataForge Engine Metrics Dashboard",
+  "panels": [
+    {
+      "title": "Total Rows Parsed",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "dataforge_rows_parsed_total", "legendFormat": "Rows" }
+      ]
+    },
+    {
+      "title": "Total Bytes Processed",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "targets": [
+        { "expr": "dataforge_bytes_processed_total", "legendFormat": "Bytes" }
+      ]
+    },
+    {
+      "title": "Active Jobs",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "targets": [
+        { "expr": "dataforge_active_jobs", "legendFormat": "Active Jobs" }
+      ]
+    },
+    {
+      "title": "Transformations Executed Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        { "expr": "rate(dataforge_transformations_total[1m])", "legendFormat": "Transforms/sec" }
+      ]
+    },
+    {
+      "title": "Error Count",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        { "expr": "dataforge_errors_total", "legendFormat": "Errors" }
+      ]
+    }
+  ],
+  "schemaVersion": 36,
+  "style": "dark",
+  "tags": ["dataforge", "rust", "metrics"],
+  "time": { "from": "now-1h", "to": "now" }
+}

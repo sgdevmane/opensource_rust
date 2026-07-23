@@ -79,9 +79,6 @@ impl WasmPlugin {
         };
 
         if let Some(limit) = self.fuel_limit {
-            // Reset fuel before each cell execution by consuming current fuel and adding the limit
-            let current = self.store.get_fuel().unwrap_or(0);
-            let _ = self.store.consume_fuel(current);
             let _ = self.store.add_fuel(limit);
         }
 

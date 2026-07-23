@@ -1,244 +1,121 @@
-# SpreadsheetParser 🚀
+# SpreadsheetParser (DataForge Engine) 🚀
 
-SpreadsheetParser is a high-performance, memory-bounded, cross-language streaming spreadsheet engine written in Rust. It allows developers in any language—including Node.js, Python, C/C++, and WebAssembly (browsers/Edge)—to parse, write, and manipulate massive spreadsheet datasets (100k+ to millions of rows in CSV, XLSX, and ODS formats) with constant memory usage, avoiding Out-Of-Memory (OOM) crashes.
-
----
-
-## Why SpreadsheetParser Wins
-
-- **Memory-Bounded Operations**: SpreadsheetParser operates on a configurable memory ceiling (e.g. 256MB) and employs a thread-safe atomic backpressure mechanism. If memory utilization is high, producer threads are blocked or throttled, guaranteeing constant memory consumption.
-- **Zero-Copy & SIMD Parsing**: Utilizes memory-mapped files via `memmap2` and SIMD-accelerated scanning (`memchr`) to process delimiters and boundaries at raw hardware speed.
-- **Multi-Core Scaling**: Parallelizes CSV chunk boundaries dynamically across available CPU cores via Rayon's work-stealing scheduler.
-- **True SAX XML Parsing**: XLSX and ODS streaming parsers read ZIP xml elements row-by-row, resolving shared strings lazily without ever holding a full XML DOM in memory.
-- **Composable Transformation Pipeline**: Supports lazy, streaming transformations (filter, map, type-coercion, computed columns, sorted batches, and aggregates) on raw row batches.
-- **Universal Portability**: Native Rust core wrapped with target-specific bindings:
-  - **Rust**: Safe zero-cost abstractions
-  - **C FFI**: Stable ABI for C, C++, Go, C#, Java (JNI), Ruby, C#
-  - **Node.js**: `napi-rs` bindings with async generators and JS proxy objects
-  - **Python**: `PyO3` bindings with iterator/generator protocols releasing the GIL
-  - **WebAssembly**: `wasm-bindgen` bindings for browser/Edge workers operating on ArrayBuffers
+DataForge is a high-performance, memory-bounded, cross-language streaming spreadsheet and tabular data engine written in Rust. It enables developers in Rust, Python, Node.js, WebAssembly (browser/Edge), and C/C++ to process, parse, clean, transform, diff, and export massive spreadsheet datasets with constant memory usage.
 
 ---
 
-## Workspace Structure
+## 🌟 The 20 Core Enhancements Implemented
 
-The workspace is organized as a Cargo workspace with 5 specialized crates:
+1. **Streaming CSV/XLSX/ODS Parsers**: Constant memory parsing for arbitrarily large files without loading the entire dataset into memory.
+2. **Spreadsheet Formula Evaluation Engine**: Evaluates functions like `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `IF`, `VLOOKUP`, `CONCAT`, and `TRIM`.
+3. **Parquet & Feather Format Support**: Native read/write support for Apache Parquet and Apache Arrow IPC formats.
+4. **Automatic Schema Inference & Data Type Sniffing**: Automatic detection of integers, floats, booleans, dates, datetimes, strings, currencies, and percentages.
+5. **Data Cleaning & Anonymization Pipeline (`clean.rs`)**: PII masking (Email, Phone, SSN, Credit Card, IP Address), whitespace trimming, and regex normalization.
+6. **In-Browser Web Worker Processing (WASM)**: Asynchronous Web Worker bindings operating on Uint8Array buffers without freezing the browser UI thread.
+7. **Virtualized UI Grid Integration**: Ready-to-use export helpers formatting output for AG Grid, TanStack Table, and Handsontable.
+8. **Export to PDF & HTML Reports (`pdf.rs`)**: Styled HTML report generator with dark mode and printable PDF document formatting.
+9. **Zero-Copy Arrow PyCapsule / PyArrow Integration**: Memory sharing with PyArrow, Pandas, and Polars.
+10. **Async Node.js N-API Streams**: Native streaming chunk processing in Node.js Express/Fastify pipelines.
+11. **Type-Safe TypeScript Definitions**: Complete auto-generated TypeScript declarations (`index.d.ts`).
+12. **Prometheus Metrics & Grafana Dashboard**: Built-in `/metrics` exposition endpoint and pre-configured Grafana dashboard (`grafana-dashboard.json`).
+13. **Fuzz Testing Suite (`fuzz_csv_xlsx.rs`)**: Fuzz targets protecting parsers from panic crashes on malformed files.
+14. **Swagger & Postman API Schema**: Interactive Swagger UI (`/swagger-ui`) powered by `utoipa` and importable Postman collection (`postman_collection.json`).
+15. **Docker Staging & Production Compose Setup**: `docker-compose.yml`, `docker-compose.staging.yml`, `docker-compose.prod.yml`, `.env.local`, `.env.staging`, and `.env.production`.
+16. **PostgreSQL / SQL Dump Exporter**: Generates PostgreSQL DDL & DML statements (`CREATE TABLE`, `INSERT`, `COPY`).
+17. **Pivot Table & Aggregation Engine (`pivot.rs`)**: Multi-dimensional pivot grouping (`SUM`, `COUNT`, `AVG`, `MIN`, `MAX`).
+18. **Fuzzy String Matching & Deduplication (`dedup.rs`, `join.rs`)**: Levenshtein / Jaro-Winkler distance deduplication and fuzzy joining.
+19. **Diff & Audit Engine (`diff.rs`)**: Detects inserted, deleted, and modified rows and cell-level changes between workbooks.
+20. **Multi-Workbook Merge & Join Engine**: INNER, LEFT, RIGHT, and FULL OUTER joins across tables.
+
+---
+
+## 🏗️ Architecture & Member Crates
 
 ```
 spreadsheet_parser/
-├── Cargo.toml                    # Workspace root Cargo manifest
-├── LICENSE-MIT                   # MIT License
-├── LICENSE-APACHE                # Apache 2.0 License
-├── README.md                     # This file
-├── CONTRIBUTING.md               # Contribution Guidelines
+├── Cargo.toml                    # Workspace root manifest
+├── init.sql                      # Fresh database setup script for PostgreSQL
+├── postman_collection.json       # Importable Postman REST collection
+├── prometheus.yml                # Prometheus scrape config
+├── grafana-dashboard.json        # Grafana dashboard visualization
+├── docker-compose.yml            # Local dev Docker Compose
+├── docker-compose.staging.yml    # Staging Docker Compose
+├── docker-compose.prod.yml       # Production Docker Compose
+├── .env.local                    # Local environment settings
+├── .env.staging                  # Staging environment settings
+├── .env.production               # Production environment settings
+├── Dockerfile                    # Container build configuration
 ├── crates/
-│   ├── dataforge-core/           # Pure Rust core implementation
-│   ├── dataforge-ffi/            # C-compatible ABI static & dynamic library
+│   ├── dataforge-core/           # Rust core engine (parsers, transforms, diff, pdf, metrics)
+│   ├── dataforge-server/         # REST API Backend with Axum, Swagger UI, & SQLx Postgres
+│   ├── dataforge-ffi/            # C-compatible static & dynamic library + dataforge.h
 │   ├── dataforge-node/           # Node.js native addon (napi-rs)
 │   ├── dataforge-python/         # Python compiled module (PyO3)
-│   └── dataforge-wasm/           # Browser & Edge WASM package (wasm-bindgen)
-├── examples/                     # Runable language-specific examples
-└── tests/                        # Workspace integration tests
+│   └── dataforge-wasm/           # WebAssembly bindings (wasm-bindgen)
+└── fuzz/                         # Fuzz testing suite
 ```
 
 ---
 
-## Performance Targets & Benchmarks
+## ⚡ Quick Start Commands & Scripts
 
-| Operation | Performance Target (1M Rows) | Memory Footprint |
-| :--- | :--- | :--- |
-| **CSV Read** | < 2.0 seconds | Constant (~30MB) |
-| **CSV Parallel Read** | < 0.5 seconds | Constant (~50MB) |
-| **XLSX Read** | < 8.0 seconds | Constant (~60MB) |
-| **CSV → XLSX Convert** | < 15.0 seconds | Constant (~80MB) |
-
-*Benchmarks ran on Apple M-series chips using `criterion` framework.*
-
----
-
-## Quick Start & Examples
-
-Detailed execution examples for all supported environments are provided below.
-
-### 1. Rust Core Usage
-
-Add the library to your `Cargo.toml`:
-```toml
-[dependencies]
-dataforge-core = { path = "./crates/dataforge-core" }
-```
-
-Stream a CSV file:
-```rust
-use dataforge_core::config::ReaderConfig;
-use dataforge_core::csv::CsvReader;
-
-fn main() {
-    let config = ReaderConfig::default()
-        .with_batch_size(8192)
-        .with_parallel(true);
-
-    let reader = CsvReader::open("massive_data.csv", config).unwrap();
-    for batch_result in reader {
-        let batch = batch_result.unwrap();
-        println!("Loaded batch of {} rows", batch.len());
-        for row in batch.iter() {
-            // Access cells by index:
-            let name = row.get_str(0);
-            let age = row.get_int(1);
-        }
-    }
-}
-```
-
-### 2. Node.js Bindings (napi-rs)
-
-Install directly from the npm registry (precompiled binaries are loaded dynamically):
+### Running the REST Backend Server
 ```bash
-npm install dataforge-native
+# Run locally with .env.local settings
+cargo run -p dataforge-server
+
+# Access API & Swagger UI:
+# - Swagger UI: http://localhost:8080/swagger-ui
+# - Health check: http://localhost:8080/health
+# - Prometheus metrics: http://localhost:8080/metrics
 ```
 
-Alternatively, to compile the Node bindings from source:
+### Running with Docker Compose
 ```bash
-cd crates/dataforge-node
-npm install
-npm run build
+# Local development:
+docker-compose up --build
+
+# Staging deployment:
+docker-compose -f docker-compose.staging.yml up -d
+
+# Production deployment:
+docker-compose -f docker-compose.prod.yml up -d
 ```
 
-Usage in JavaScript:
-```javascript
-import { JsCsvReader } from 'dataforge-native';
-
-const reader = JsCsvReader.open('massive_data.csv', 8192, true);
-console.log('Headers:', reader.headers);
-
-let batch;
-while ((batch = reader.next_batch()) !== null) {
-  const jsonRows = batch.toJsonObjects(); // Converts rows to plain JS objects
-  console.log(`Processed ${jsonRows.length} rows`);
-}
-```
-
-### 3. Python Bindings (PyO3)
-
-Compile Python bindings using Maturin:
+### Database Ingestion (`init.sql`)
+To set up a fresh PostgreSQL database instance:
 ```bash
-cd crates/dataforge-python
-pip install maturin
-maturin develop
+psql $DATABASE_URL -f init.sql
 ```
 
-Usage in Python:
-```python
-import dataforge
-
-# PyCsvReader yields batches incrementally, releasing the GIL during parsing
-reader = dataforge.PyCsvReader("massive_data.csv", batch_size=8192)
-for batch in reader:
-    # to_dicts() returns list of dicts, ready to be read into Pandas/Polars
-    records = batch.to_dicts()
-    print(f"Processed batch of {len(records)} records")
-```
-
-### 4. WebAssembly Bindings (wasm-bindgen)
-
-Compile for target browsers or bundlers:
+### Running Workspace Tests & Verification
 ```bash
-cd crates/dataforge-wasm
-wasm-pack build --target web
-```
+# Run all workspace unit and integration tests
+cargo test --workspace
 
-Usage in the browser/worker:
-```javascript
-import init, { WasmXlsxReader } from './pkg/dataforge_wasm.js';
-
-await init();
-
-// Read spreadsheet bytes uploaded by user
-const response = await fetch('upload.xlsx');
-const bytes = new Uint8Array(await response.arrayBuffer());
-
-const reader = new WasmXlsxReader(bytes, 4096);
-let batch;
-while ((batch = reader.next_batch()) !== null) {
-  const data = batch.to_json_objects();
-  console.log(data);
-}
-```
-
-### 5. C / C++ & FFI Bindings
-
-Build static and dynamic C libraries:
-```bash
-cd crates/dataforge-ffi
-cargo build --release
-```
-This produces `libdataforge_ffi.a` (static) and `libdataforge_ffi.so` / `libdataforge_ffi.dylib` (dynamic) and automatically generates the header file `crates/dataforge-ffi/include/dataforge.h` using `cbindgen` to link in C/C++, Go, or Python `ctypes`.
-
----
-
-## Advanced Features & Core Upgrades
-
-SpreadsheetParser is packed with production-ready, premium-grade features:
-
-### 1. Password Protected XLSX Decryption & Encryption
-Transparently handles ECMA-376 Agile password-protected spreadsheets:
-- **Decryption**: Provide the decryption password in the configuration:
-  ```rust
-  let config = ReaderConfig::default().with_password("my_secure_password");
-  let reader = XlsxReader::open("encrypted.xlsx", config)?;
-  ```
-- **Encryption**: Export unencrypted XLSX payloads to password-protected OLE documents:
-  ```rust
-  dataforge_core::xlsx::encrypt_xlsx(&xlsx_bytes, "password", &mut file)?;
-  ```
-
-### 2. Composable Transformation Pipelines
-Lazily build high-performance data processing pipelines:
-```rust
-use dataforge_core::transform::pipeline::Pipeline;
-use dataforge_core::transform::filter::{ColumnFilter, ComparisonOp};
-
-let pipeline = Pipeline::new()
-    .filter("Age", ComparisonOp::GreaterThan, CellValue::from(30_i64))
-    .rename_column("Name", "Full Name")
-    .select_columns(vec!["Full Name".to_string(), "Age".to_string()]);
-```
-
-### 3. Disk-Buffered Sorting & Incremental Runs
-Sort datasets larger than memory using external merge sort:
-```rust
-// Sorts by column "Age" descending using temporary disk runs
-let mut sorted_reader = reader.external_sort("Age", false)?;
-```
-
-### 4. Excel Styling Templates
-Generate beautifully styled workbooks instantly with professional styling presets:
-```rust
-use dataforge_core::xlsx::StyleTemplate;
-
-let config = WriterConfig::default()
-    .with_style_template(StyleTemplate::Professional); // Navy headers, zebra shading, frozen headers, auto-filters
-```
-
-### 5. Observability (Prometheus & Grafana)
-Memory consumption is fully instrumented for system telemetry:
-```rust
-// Export memory statistics in Prometheus text exposition format
-let metrics_payload = memory_tracker.to_prometheus();
+# Check workspace for lints and compilation warnings
+cargo check --workspace
 ```
 
 ---
 
-## Contributing
+## 📜 Architectural Rules, Do's and Don'ts
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on code style, linting, formatting, testing conventions, and pull request processes.
+### ✅ Do's
+- Always process large files using chunked streaming readers (`CsvReader`, `XlsxReader`) to enforce constant memory usage.
+- Store sensitive database connection URLs in `.env.local`, `.env.staging`, or `.env.production` files.
+- Monitor active jobs and throughput via `/metrics` using Prometheus and Grafana.
+- Use `dataforge-server` Swagger UI (`/swagger-ui`) or `postman_collection.json` for testing endpoints.
 
-## License
+### ❌ Don'ts
+- Do not load entire multi-gigabyte files into memory at once.
+- Do not commit hardcoded database credentials or secret keys to version control.
+- Do not ignore zero warnings/errors policies; ensure `cargo check --workspace` passes cleanly.
+
+---
+
+## ⚖️ License
 
 Dual-licensed under either:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
-
-at your option.
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))

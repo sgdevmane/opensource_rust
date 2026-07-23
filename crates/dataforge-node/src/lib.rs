@@ -139,6 +139,12 @@ impl JsRowBatch {
             Value::Object(map)
         }).collect()
     }
+
+    #[napi]
+    pub fn to_html_report(&self, title: String, dark_mode: bool) -> String {
+        let generator = dataforge_core::PdfReportGenerator::new(title).with_dark_mode(dark_mode);
+        generator.render_html(&self.inner).unwrap_or_else(|e| format!("Error generating report: {e}"))
+    }
 }
 
 /// JS Class for CSV Streaming Reading.
