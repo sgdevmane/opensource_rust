@@ -6,4 +6,4 @@
 
 pub mod export;
 
-pub use export::{ArrowIpcWriter, infer_arrow_schema, row_batch_to_arrow_columns};
+pub use export::{ArrowIpcWriter, ArrowIpcStreamWriter, infer_arrow_schema, row_batch_to_arrow_columns};

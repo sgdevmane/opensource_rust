@@ -623,6 +623,12 @@ impl WriterConfig {
         self.xlsx.chart = Some(chart);
         self
     }
+
+    /// Set XLSX column width margin.
+    pub fn with_column_width_margin(mut self, margin: f64) -> Self {
+        self.xlsx.column_width_margin = margin;
+        self
+    }
 }
 
 /// Rule for applying conditional styling to specific column values.
@@ -645,6 +651,8 @@ pub enum ChartType {
     Bar,
     /// Line chart layout.
     Line,
+    /// Pie chart layout.
+    Pie,
 }
 
 /// Chart configurations to inject in the spreadsheet.
@@ -686,6 +694,9 @@ pub struct XlsxWriteConfig {
 
     /// Optional chart configuration
     pub chart: Option<SpreadsheetChart>,
+
+    /// Margin adjustment for auto-column widths (default: 3.0)
+    pub column_width_margin: f64,
 }
 
 impl Default for XlsxWriteConfig {
@@ -699,6 +710,7 @@ impl Default for XlsxWriteConfig {
             style: crate::xlsx::StyleTemplate::None,
             conditional_formats: Vec::new(),
             chart: None,
+            column_width_margin: 3.0,
         }
     }
 }

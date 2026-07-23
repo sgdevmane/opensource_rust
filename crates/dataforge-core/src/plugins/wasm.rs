@@ -12,6 +12,7 @@ use crate::types::{CellValue, RowBatch};
 pub struct WasmPlugin {
     store: Store<()>,
     instance: Instance,
+    fuel_limit: Option<u64>,
 }
 
 impl WasmPlugin {
@@ -30,7 +31,36 @@ impl WasmPlugin {
             .start(&mut store)
             .map_err(|e| DataForgeError::config(format!("Failed to start WASM: {e}")))?;
 
-        Ok(WasmPlugin { store, instance })
+        Ok(WasmPlugin { store, instance, fuel_limit: None })
+    }
+
+    /// Compile and instantiate a WASM plugin with a strict CPU tick (fuel) limit.
+    pub fn new_with_limits(wasm_bytes: &[u8], fuel_limit: u64) -> Result<Self> {
+        let mut wasm_config = wasmi::Config::default();
+        wasm_config.consume_fuel(true);
+        let engine = Engine::new(&wasm_config);
+        
+        let module = Module::new(&engine, wasm_bytes).map_err(|e| {
+            DataForgeError::config(format!("Failed to compile WASM module: {e}"))
+        })?;
+        
+        let mut store = Store::new(&engine, ());
+        store.add_fuel(fuel_limit).map_err(|e| {
+            DataForgeError::config(format!("Failed to configure WASM fuel limit: {e}"))
+        })?;
+        
+        let linker = Linker::new(&engine);
+        let instance = linker
+            .instantiate(&mut store, &module)
+            .map_err(|e| DataForgeError::config(format!("Failed to instantiate WASM: {e}")))?
+            .start(&mut store)
+            .map_err(|e| DataForgeError::config(format!("Failed to start WASM: {e}")))?;
+
+        Ok(WasmPlugin {
+            store,
+            instance,
+            fuel_limit: Some(fuel_limit),
+        })
     }
 
     /// Run the custom `transform_number` function on a single CellValue.
@@ -48,10 +78,17 @@ impl WasmPlugin {
             _ => return Ok(val.clone()),
         };
 
+        if let Some(limit) = self.fuel_limit {
+            // Reset fuel before each cell execution by consuming current fuel and adding the limit
+            let current = self.store.get_fuel().unwrap_or(0);
+            let _ = self.store.consume_fuel(current);
+            let _ = self.store.add_fuel(limit);
+        }
+
         let mut results = [Value::F64(0.0.into())];
         func.call(&mut self.store, &[Value::F64(val_f64.into())], &mut results)
             .map_err(|e| {
-                DataForgeError::internal(format!("WASM call failed: {e}"))
+                DataForgeError::internal(format!("WASM call failed or exceeded resource limit: {e}"))
             })?;
 
         let res = match results[0] {
@@ -113,5 +150,20 @@ mod tests {
         let val_float = CellValue::Float(2.5);
         let res_float = plugin.transform_cell(&val_float).unwrap();
         assert!((res_float.as_float().unwrap() - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_wasm_plugin_sandbox_limits() {
+        // Sufficient fuel should succeed
+        let mut plugin = WasmPlugin::new_with_limits(WASM_BYTES, 1000).unwrap();
+        let val = CellValue::Int(10);
+        assert_eq!(plugin.transform_cell(&val).unwrap(), CellValue::Int(20));
+
+        // Insufficient fuel (e.g. 1 tick) should fail with resource limit error
+        let mut limited_plugin = WasmPlugin::new_with_limits(WASM_BYTES, 1).unwrap();
+        let res = limited_plugin.transform_cell(&val);
+        assert!(res.is_err());
+        let err_msg = res.err().unwrap().to_string();
+        assert!(err_msg.contains("resource limit"));
     }
 }

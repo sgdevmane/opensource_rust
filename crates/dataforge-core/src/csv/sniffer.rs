@@ -14,6 +14,8 @@ pub struct SniffedDialect {
     pub delimiter: u8,
     /// Quote character (usually `"`)
     pub quote_char: u8,
+    /// Escape character (typically `\`)
+    pub escape_char: Option<u8>,
     /// Whether the file has a header row
     pub has_header: bool,
 }
@@ -62,20 +64,29 @@ impl CsvSniffer {
             }
         }
 
-        // 2. Detect quote character (default to `"` or `'` if prevalent)
+        // 2. Detect quote character (using SIMD)
+        let single_quotes = simd_count_occ(data, b'\'');
+        let double_quotes = simd_count_occ(data, b'"');
         let mut quote_char = b'"';
-        let single_quotes = content.chars().filter(|&c| c == '\'').count();
-        let double_quotes = content.chars().filter(|&c| c == '"').count();
         if single_quotes > double_quotes {
             quote_char = b'\'';
         }
 
-        // 3. Detect header by comparing type votes
+        // 3. Detect escape character (using SIMD)
+        let backslashes = simd_count_occ(data, b'\\');
+        let escape_char = if backslashes > 0 {
+            Some(b'\\')
+        } else {
+            None
+        };
+
+        // 4. Detect header by comparing type votes
         let has_header = detect_header(&lines, best_delim);
 
         Ok(SniffedDialect {
             delimiter: best_delim,
             quote_char,
+            escape_char,
             has_header,
         })
     }
@@ -121,6 +132,32 @@ fn detect_header(lines: &[&str], delimiter: u8) -> bool {
     }
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn simd_count_occ(data: &[u8], delim: u8) -> usize {
+    #[cfg(target_arch = "x86")]
+    use std::arch::x86::*;
+    #[cfg(target_arch = "x86_64")]
+    use std::arch::x86_64::*;
+
+    if is_x86_feature_detected!("sse2") {
+        let mut count = 0;
+        unsafe {
+            let delim_vec = _mm_set1_epi8(delim as i8);
+            let chunks = data.chunks_exact(16);
+            let rem = chunks.remainder();
+            for chunk in chunks {
+                let chunk_vec = _mm_loadu_si128(chunk.as_ptr() as *const __m128i);
+                let eq = _mm_cmpeq_epi8(chunk_vec, delim_vec);
+                let mask = _mm_movemask_epi8(eq);
+                count += mask.count_ones() as usize;
+            }
+            count + rem.iter().filter(|&&b| b == delim).count()
+        }
+    } else {
+        data.iter().filter(|&&b| b == delim).count()
+    }
+}
+
 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
 fn simd_count_occ(data: &[u8], delim: u8) -> usize {
     use std::arch::wasm32::*;
@@ -139,11 +176,13 @@ fn simd_count_occ(data: &[u8], delim: u8) -> usize {
     count + rem.iter().filter(|&&b| b == delim).count()
 }
 
-#[cfg(not(all(target_arch = "wasm32", target_feature = "simd128")))]
+#[cfg(not(any(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    all(target_arch = "wasm32", target_feature = "simd128")
+)))]
 fn simd_count_occ(data: &[u8], delim: u8) -> usize {
     data.iter().filter(|&&b| b == delim).count()
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -155,6 +194,7 @@ mod tests {
         let dialect = CsvSniffer::sniff(csv).unwrap();
         assert_eq!(dialect.delimiter, b',');
         assert_eq!(dialect.quote_char, b'"');
+        assert_eq!(dialect.escape_char, None);
         assert!(dialect.has_header);
     }
 
@@ -173,4 +213,13 @@ mod tests {
         assert_eq!(dialect.delimiter, b'\t');
         assert!(dialect.has_header);
     }
+
+    #[test]
+    fn test_sniff_escape_char() {
+        let csv = b"name,description\nAlice,likes \\, comma\nBob,no escape\n";
+        let dialect = CsvSniffer::sniff(csv).unwrap();
+        assert_eq!(dialect.escape_char, Some(b'\\'));
+    }
 }
+
+

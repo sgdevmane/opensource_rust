@@ -81,6 +81,38 @@ pub struct ParquetReader {
     headers: Vec<String>,
 }
 
+/// Metadata information for a Parquet column.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParquetColumnMetadata {
+    pub name: String,
+    pub data_type: crate::types::DataType,
+}
+
+/// Scan only the metadata of a Parquet file to extract the schema columns and types.
+pub fn scan_parquet_metadata<R: parquet::file::reader::ChunkReader + 'static>(reader: R) -> Result<Vec<ParquetColumnMetadata>> {
+    let builder = ParquetRecordBatchReaderBuilder::try_new(reader)
+        .map_err(|e| DataForgeError::internal(format!("Parquet reader builder failed: {e}")))?;
+    
+    let schema_arrow = builder.schema();
+    let mut columns = Vec::new();
+    
+    for field in schema_arrow.fields() {
+        let name = field.name().clone();
+        let data_type = match field.data_type() {
+            ArrowDataType::Boolean => crate::types::DataType::Bool,
+            ArrowDataType::Int8 | ArrowDataType::Int16 | ArrowDataType::Int32 | ArrowDataType::Int64 |
+            ArrowDataType::UInt8 | ArrowDataType::UInt16 | ArrowDataType::UInt32 | ArrowDataType::UInt64 => crate::types::DataType::Int,
+            ArrowDataType::Float32 | ArrowDataType::Float64 => crate::types::DataType::Float,
+            ArrowDataType::Date32 | ArrowDataType::Date64 => crate::types::DataType::Date,
+            ArrowDataType::Timestamp(_, _) => crate::types::DataType::DateTime,
+            _ => crate::types::DataType::String,
+        };
+        columns.push(ParquetColumnMetadata { name, data_type });
+    }
+    
+    Ok(columns)
+}
+
 impl ParquetReader {
     /// Create a new ParquetReader from a seekable reader source.
     pub fn new<R: parquet::file::reader::ChunkReader + 'static>(reader: R) -> Result<Self> {
@@ -260,5 +292,35 @@ mod tests {
         assert_eq!(read_batch.len(), 2);
         assert_eq!(read_batch.rows[0].get_str(0), Some("Alice"));
         assert_eq!(read_batch.rows[1].get_int(1), Some(25));
+    }
+
+    #[test]
+    fn test_parquet_metadata_scanner() {
+        let mut batch = RowBatch::new(0);
+        batch.headers = Some(vec!["name".to_string(), "age".to_string(), "active".to_string()]);
+        
+        let mut r1 = Row::new(0);
+        r1.push(CellValue::from("Alice"));
+        r1.push(CellValue::from(30_i64));
+        r1.push(CellValue::from(true));
+        batch.push(r1);
+
+        let temp_file = tempfile::NamedTempFile::new().unwrap();
+        let file_write = temp_file.reopen().unwrap();
+
+        let mut writer = ParquetWriter::new();
+        writer.write_batch(file_write, &batch).unwrap();
+        writer.finish().unwrap();
+
+        let file_read = std::fs::File::open(temp_file.path()).unwrap();
+        let columns = scan_parquet_metadata(file_read).unwrap();
+
+        assert_eq!(columns.len(), 3);
+        assert_eq!(columns[0].name, "name");
+        assert_eq!(columns[0].data_type, crate::types::DataType::String);
+        assert_eq!(columns[1].name, "age");
+        assert_eq!(columns[1].data_type, crate::types::DataType::Int);
+        assert_eq!(columns[2].name, "active");
+        assert_eq!(columns[2].data_type, crate::types::DataType::Bool);
     }
 }

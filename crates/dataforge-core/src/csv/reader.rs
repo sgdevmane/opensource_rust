@@ -394,13 +394,24 @@ impl CsvReader {
         let data_start = bom_offset + header_end;
         let data_region = &mmap[data_start..];
 
-        // Determine number of chunks
+        // Auto-tune number of chunks based on file size and core count
         let num_threads = config.num_threads.unwrap_or_else(|| {
             std::thread::available_parallelism()
                 .map(|n| n.get())
                 .unwrap_or(4)
         });
-        let num_chunks = num_threads.max(1);
+        
+        let num_chunks = if data_region.len() < 64 * 1024 {
+            // Small file: single chunk to avoid thread overhead
+            1
+        } else if data_region.len() > 10 * 1024 * 1024 {
+            // Large file (>10MB): over-decompose into 4x the thread count
+            // to allow better load-balancing/work-stealing on dense rows.
+            num_threads * 4
+        } else {
+            // Medium file: match thread count
+            num_threads
+        }.max(1);
 
         // Split file into chunks at newline boundaries
         let chunks = split_into_chunks(data_region, num_chunks, data_start);

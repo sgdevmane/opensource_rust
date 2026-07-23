@@ -12,7 +12,7 @@ use arrow::array::{
     StringBuilder, TimestampSecondBuilder,
 };
 use arrow::datatypes::{DataType as ArrowDataType, Field, Schema, SchemaRef};
-use arrow::ipc::writer::FileWriter;
+use arrow::ipc::writer::{FileWriter, StreamWriter};
 use arrow::record_batch::RecordBatch;
 
 use crate::error::{DataForgeError, Result};
@@ -78,6 +78,71 @@ impl<W: Write> ArrowIpcWriter<W> {
         if let Some(mut writer) = self.writer.take() {
             writer.finish()
                 .map_err(|e| DataForgeError::io(std::io::Error::new(std::io::ErrorKind::Other, e), "Failed to finalize Arrow IPC writer"))?;
+        }
+        Ok(())
+    }
+}
+
+/// Streaming Apache Arrow IPC StreamWriter for sequential, non-seekable streaming.
+pub struct ArrowIpcStreamWriter<W: Write> {
+    writer: Option<StreamWriter<W>>,
+    schema: Option<SchemaRef>,
+}
+
+impl<W: Write> Default for ArrowIpcStreamWriter<W> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<W: Write> ArrowIpcStreamWriter<W> {
+    /// Create a new ArrowIpcStreamWriter.
+    pub fn new() -> Self {
+        ArrowIpcStreamWriter {
+            writer: None,
+            schema: None,
+        }
+    }
+
+    /// Write a RowBatch to the Arrow IPC stream.
+    pub fn write_batch(&mut self, inner_writer: W, batch: &RowBatch) -> Result<()> {
+        if batch.is_empty() {
+            return Ok(());
+        }
+
+        // Initialize schema if not already done
+        if self.schema.is_none() {
+            let schema = infer_arrow_schema(batch)?;
+            self.schema = Some(Arc::new(schema));
+        }
+
+        let schema_ref = self.schema.as_ref().unwrap();
+
+        // Convert RowBatch cells to Arrow columns
+        let columns = row_batch_to_arrow_columns(batch, schema_ref)?;
+
+        let record_batch = RecordBatch::try_new(Arc::clone(schema_ref), columns)
+            .map_err(|e| DataForgeError::internal(format!("Arrow RecordBatch creation failed: {}", e)))?;
+
+        // Initialize writer if not done
+        if self.writer.is_none() {
+            let w = StreamWriter::try_new(inner_writer, schema_ref)
+                .map_err(|e| DataForgeError::internal(format!("Arrow IPC StreamWriter initialization failed: {}", e)))?;
+            self.writer = Some(w);
+        }
+
+        let writer = self.writer.as_mut().unwrap();
+        writer.write(&record_batch)
+            .map_err(|e| DataForgeError::io(std::io::Error::new(std::io::ErrorKind::Other, e), "Failed to write Arrow RecordBatch to IPC stream"))?;
+
+        Ok(())
+    }
+
+    /// Finalize and close the Arrow IPC stream.
+    pub fn finish(mut self) -> Result<()> {
+        if let Some(mut writer) = self.writer.take() {
+            writer.finish()
+                .map_err(|e| DataForgeError::io(std::io::Error::new(std::io::ErrorKind::Other, e), "Failed to finalize Arrow IPC stream writer"))?;
         }
         Ok(())
     }
@@ -245,5 +310,26 @@ mod tests {
 
         let bytes = buffer.into_inner();
         assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_arrow_ipc_stream_writer() {
+        let mut batch = RowBatch::new(0);
+        batch.headers = Some(vec!["name".to_string(), "age".to_string()]);
+        
+        let mut r1 = Row::new(0);
+        r1.push(CellValue::from("Alice"));
+        r1.push(CellValue::from(30_i64));
+        batch.push(r1);
+
+        let mut buffer = Cursor::new(Vec::new());
+        let mut writer = ArrowIpcStreamWriter::new();
+        writer.write_batch(&mut buffer, &batch).unwrap();
+        writer.finish().unwrap();
+
+        let bytes = buffer.into_inner();
+        assert!(!bytes.is_empty());
+        // Arrow IPC Stream begins with the schema dictionary/record batch headers, not the file magic number ARROW1
+        assert_ne!(&bytes[..6], b"ARROW1");
     }
 }

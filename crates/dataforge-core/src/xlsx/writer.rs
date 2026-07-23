@@ -77,6 +77,9 @@ pub struct XlsxWriter<W: Write + Seek> {
 
     /// Track column widths for auto-fitting
     column_widths: Vec<usize>,
+
+    /// Ranges of cells to merge (e.g., "A1:B2")
+    pub merged_ranges: Vec<String>,
 }
 
 impl XlsxWriter<BufWriter<File>> {
@@ -109,6 +112,7 @@ impl<W: Write + Seek> XlsxWriter<W> {
             worksheet_xml: Vec::with_capacity(1024 * 1024), // 1MB initial buffer
             worksheet_started: false,
             column_widths: Vec::new(),
+            merged_ranges: Vec::new(),
         };
 
         // Write the worksheet XML header
@@ -208,6 +212,11 @@ impl<W: Write + Seek> XlsxWriter<W> {
         }
 
         Ok(())
+    }
+
+    /// Merge a range of cells (e.g., "A1:B2").
+    pub fn merge_cells(&mut self, range: &str) {
+        self.merged_ranges.push(range.to_string());
     }
 
     /// Write a single cell element to the worksheet XML.
@@ -363,6 +372,20 @@ impl<W: Write + Seek> XlsxWriter<W> {
             }
         }
 
+        // Add mergeCells if configured
+        if !self.merged_ranges.is_empty() {
+            let count = self.merged_ranges.len();
+            self.worksheet_xml.extend_from_slice(
+                format!("<mergeCells count=\"{count}\">\n").as_bytes()
+            );
+            for range in &self.merged_ranges {
+                self.worksheet_xml.extend_from_slice(
+                    format!("  <mergeCell ref=\"{range}\"/>\n").as_bytes()
+                );
+            }
+            self.worksheet_xml.extend_from_slice(b"</mergeCells>\n");
+        }
+
         if self.config.xlsx.chart.is_some() {
             self.worksheet_xml.extend_from_slice(b"<drawing r:id=\"rIdDrawing1\"/>\n");
         }
@@ -449,7 +472,8 @@ impl<W: Write + Seek> XlsxWriter<W> {
                 final_worksheet_xml.extend_from_slice(&self.worksheet_xml[..pos]);
                 final_worksheet_xml.extend_from_slice(b"<cols>\n");
                 for (i, &w) in self.column_widths.iter().enumerate() {
-                    let width = (w as f64 + 3.0).max(10.0).min(50.0);
+                    let margin = self.config.xlsx.column_width_margin;
+                    let width = (w as f64 + margin).max(10.0).min(50.0);
                     let col_xml = format!(
                         "  <col min=\"{}\" max=\"{}\" width=\"{:.2}\" customWidth=\"1\"/>\n",
                         i + 1, i + 1, width
@@ -523,6 +547,7 @@ impl<W: Write + Seek> XlsxWriter<W> {
             let chart_tag = match chart.chart_type {
                 crate::config::ChartType::Bar => "barChart",
                 crate::config::ChartType::Line => "lineChart",
+                crate::config::ChartType::Pie => "pieChart",
             };
 
             // Write xl/charts/chart1.xml
@@ -772,5 +797,29 @@ mod tests {
 
         let rows = writer.finish().unwrap();
         assert_eq!(rows, 2);
+    }
+
+    #[test]
+    fn test_xlsx_cell_merging() {
+        let config = WriterConfig::default()
+            .with_headers(vec!["Name".into(), "Value".into()]);
+
+        let buffer = Cursor::new(Vec::new());
+        let mut writer = XlsxWriter::new(buffer, config).unwrap();
+
+        let mut row = Row::new(0);
+        row.push(CellValue::from("MergeTest"));
+        row.push(CellValue::from(100_i64));
+        writer.write_row(&row).unwrap();
+
+        writer.merge_cells("A1:B1");
+        assert_eq!(writer.merged_ranges.len(), 1);
+        assert_eq!(writer.merged_ranges[0], "A1:B1");
+
+        let xml_str = String::from_utf8(writer.worksheet_xml.clone()).unwrap();
+        // The worksheet_xml doesn't contain mergeCells yet because it's only appended on finish()
+        assert!(!xml_str.contains("mergeCells"));
+
+        let _ = writer.finish().unwrap();
     }
 }

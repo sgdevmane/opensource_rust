@@ -61,6 +61,19 @@ impl WasmRowBatch {
 
         serde_wasm_bindgen::to_value(&list).unwrap_or(JsValue::NULL)
     }
+
+    /// Export batch to a Uint8Array containing Arrow IPC file format bytes.
+    /// This can be loaded directly zero-copy into Arrow JS or Web-Polars!
+    #[wasm_bindgen]
+    pub fn to_arrow_ipc(&self) -> Result<Vec<u8>, JsValue> {
+        let mut buffer = std::io::Cursor::new(Vec::new());
+        let mut writer = dataforge_core::ArrowIpcWriter::new();
+        writer.write_batch(&mut buffer, &self.inner)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        writer.finish()
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        Ok(buffer.into_inner())
+    }
 }
 
 /// CSV Streaming Reader for WASM.

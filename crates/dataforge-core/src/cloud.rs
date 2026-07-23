@@ -14,6 +14,18 @@ fn get_mock_storage() -> &'static Mutex<HashMap<String, Vec<u8>>> {
     STORAGE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// A session handle tracking state of an active S3/GCS multipart upload.
+pub struct MultipartUploadSession {
+    /// The generated unique upload session ID
+    pub upload_id: String,
+    /// Destination storage object path
+    pub path: String,
+    /// Completed parts list: vector of (PartNumber, ETag)
+    pub parts: Vec<(usize, String)>,
+    /// Combined payload buffer holding parts uploaded so far
+    pub buffer: Vec<u8>,
+}
+
 /// Direct Cloud Storage Client supporting AWS S3 and Google Cloud Storage (GCS).
 pub struct CloudStorageClient {
     pub provider: String, // "s3" or "gcs"
@@ -63,6 +75,37 @@ impl CloudStorageClient {
         );
         Ok(())
     }
+
+    /// Initiate an S3/GCS style multipart upload session.
+    pub fn initiate_multipart_upload(&self, path: &str) -> Result<MultipartUploadSession> {
+        let upload_id = uuid::Uuid::new_v4().to_string();
+        Ok(MultipartUploadSession {
+            upload_id,
+            path: path.to_string(),
+            parts: Vec::new(),
+            buffer: Vec::new(),
+        })
+    }
+
+    /// Upload a chunk part to the multipart upload session.
+    pub fn upload_part(&self, session: &mut MultipartUploadSession, part_number: usize, data: &[u8]) -> Result<String> {
+        if data.is_empty() {
+            return Err(DataForgeError::config("Cannot upload empty part in multipart upload"));
+        }
+        session.buffer.extend_from_slice(data);
+        let etag = format!("etag-part-{}-{}", part_number, uuid::Uuid::new_v4());
+        session.parts.push((part_number, etag.clone()));
+        Ok(etag)
+    }
+
+    /// Finalize the multipart upload session, combining all parts and persisting the object in cloud storage.
+    pub fn complete_multipart_upload(&self, session: MultipartUploadSession) -> Result<()> {
+        if session.parts.is_empty() {
+            return Err(DataForgeError::config("Cannot complete multipart upload with zero parts"));
+        }
+        self.write_object(&session.path, &session.buffer)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -80,5 +123,26 @@ mod tests {
         // Read object
         let read_data = client.read_object("raw/input.csv").unwrap();
         assert_eq!(read_data, sample_data);
+    }
+
+    #[test]
+    fn test_cloud_multipart_upload() {
+        let client = CloudStorageClient::new("gcs", "reports");
+        let mut session = client.initiate_multipart_upload("monthly/2026-07.xlsx").unwrap();
+
+        let part1 = b"Part 1 Data Chunk - ";
+        let part2 = b"Part 2 Data Chunk";
+
+        let etag1 = client.upload_part(&mut session, 1, part1).unwrap();
+        let etag2 = client.upload_part(&mut session, 2, part2).unwrap();
+
+        assert!(!etag1.is_empty());
+        assert!(!etag2.is_empty());
+        assert_eq!(session.parts.len(), 2);
+
+        client.complete_multipart_upload(session).unwrap();
+
+        let final_data = client.read_object("monthly/2026-07.xlsx").unwrap();
+        assert_eq!(final_data, b"Part 1 Data Chunk - Part 2 Data Chunk");
     }
 }
